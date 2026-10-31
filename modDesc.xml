@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<modDesc descVersion="113">
+    <author>Toneslin</author>
+    <version>1.5.7.0</version>
+    <title>
+        <en>AutoDrive Jobs</en>
+        <de>AutoDrive Aufträge</de>
+    </title>
+    <description>
+        <en><![CDATA[Add-on for AutoDrive: rule based supply jobs.
+If the fill level of a building (animal food, food group, straw, water, silo, production storage, ...) falls below X %, the vehicle that has the chosen AutoDrive park position assigned is started when it stands there. It drives "pick up and deliver" between a load target and an unload target until Y % is reached or N trips are done, then it parks again.
+Vehicles can be watched too (e.g. a feeder slurry tanker): if its level falls below X % and nothing is being transferred for 15 s, it drives to the load target, loads and returns to a chosen AD target (or automatically to the AD target nearest to where it stood).
+Open the job HUD (AutoDrive style, movable by its header) with LCtrl + LAlt + J. Requires FS25_AutoDrive. Must be installed on the server and on all players.]]></en>
+        <de><![CDATA[Zusatz für AutoDrive: Versorgungs-Aufträge nach Regeln.
+Fällt der Füllstand eines Gebäudes (Futter, Futtergruppe, Stroh, Wasser, Silo, Produktionslager, ...) unter X %, wird das Fahrzeug gestartet, dem der gewählte AutoDrive-Parkplatz zugewiesen ist und das dort steht. Es fährt "Abholen und Liefern" zwischen Ladeziel und Abladeziel, bis Y % erreicht oder N Fahrten erledigt sind, und parkt danach wieder.
+Auch Fahrzeuge können überwacht werden (z. B. ein Zubringer-Güllefass): fällt dessen Stand unter X % und wird seit 15 s nichts mehr umgeladen, fährt es zum Ladeziel, lädt und fährt zu einem gewählten AD-Ziel zurück (oder automatisch zum AD-Ziel, das seiner Standposition am nächsten liegt).
+Auftrags-HUD (im AutoDrive-Stil, an der Kopfzeile verschiebbar) öffnen mit LStrg + LAlt + J. Benötigt FS25_AutoDrive. Muss auf dem Server und bei allen Spielern installiert sein.]]></de>
+    </description>
+    <iconFilename>icon_adJobs.dds</iconFilename>
+    <multiplayer supported="true"/>
+
+    <dependencies>
+        <dependency>FS25_AutoDrive</dependency>
+    </dependencies>
+
+    <extraSourceFiles>
+        <sourceFile filename="scripts/AdJobsEvents.lua"/>
+        <sourceFile filename="scripts/AdJobs.lua"/>
+        <sourceFile filename="scripts/AdJobsHud.lua"/>
+    </extraSourceFiles>
+
+    <actions>
+        <action name="ADJ_HUD" category="ONFOOT VEHICLE" axisType="HALF"/>
+    </actions>
+
+    <inputBinding>
+        <actionBinding action="ADJ_HUD">
+            <binding device="KB_MOUSE_DEFAULT" input="KEY_lctrl KEY_lalt KEY_j"/>
+        </actionBinding>
+    </inputBinding>
+
+    <l10n>
+        <text name="input_ADJ_HUD"><en>AutoDrive Jobs: show / hide</en><de>AutoDrive Aufträge: ein- / ausblenden</de></text>
+    </l10n>
+</modDesc>
