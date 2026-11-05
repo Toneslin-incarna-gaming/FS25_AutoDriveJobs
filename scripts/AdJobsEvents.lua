@@ -49,6 +49,17 @@ local function writeJob(streamId, job, withStatus)
     streamWriteString(streamId, job.parkMarker or "")
     streamWriteInt32(streamId, job.farmId or 0)
     streamWriteString(streamId, job.emergencyMarker or "")
+    streamWriteString(streamId, job.direction or "fill")
+    streamWriteString(streamId, job.swapTrailerUid or "")
+    streamWriteString(streamId, job.swapMarker or "")
+    streamWriteString(streamId, job.swapTrailerName or "")
+    streamWriteFloat32(streamId, job.minPrice or 0)
+    streamWriteString(streamId, job.group or "")
+    streamWriteString(streamId, job.extraLoadMarkers or "")
+    streamWriteString(streamId, job.steps or "")
+    streamWriteUInt8(streamId, ADJobs.getPrio(job))
+    -- new order of the "Geplant" tab (only used client -> server)
+    streamWriteString(streamId, job.planIds or "")
     -- object references chosen in the wizard (only used client -> server)
     streamWriteInt32(streamId, objectId(job.placeableObject))
     streamWriteInt32(streamId, objectId(job.vehicleObject))
@@ -62,6 +73,18 @@ local function writeJob(streamId, job, withStatus)
         streamWriteInt32(streamId, job.tripsDone or 0)
         streamWriteInt32(streamId, job.pauseLeft or 0)
         streamWriteInt32(streamId, job.tripsTotal or 0)
+        streamWriteFloat32(streamId, job.price or -1)
+        streamWriteInt8(streamId, job.standWhere or 0)
+        streamWriteString(streamId, job.restMarker or "")
+        streamWriteInt8(streamId, job.seqIndex or 0)
+        streamWriteInt8(streamId, job.seqCount or 0)
+        streamWriteInt8(streamId, job.seqPhase or 0)
+        streamWriteInt8(streamId, job.seqPct or 0)
+        streamWriteInt32(streamId, job.planPos or 0)
+        streamWriteInt32(streamId, job.planOrder or 0)
+        streamWriteBool(streamId, job.planCur == true)
+        streamWriteString(streamId, job.planVeh or "")
+        streamWriteString(streamId, job.planVehName or "")
     end
 end
 
@@ -87,6 +110,16 @@ local function readJob(streamId)
     job.parkMarker = streamReadString(streamId)
     job.farmId = streamReadInt32(streamId)
     job.emergencyMarker = streamReadString(streamId)
+    job.direction = streamReadString(streamId)
+    job.swapTrailerUid = streamReadString(streamId)
+    job.swapMarker = streamReadString(streamId)
+    job.swapTrailerName = streamReadString(streamId)
+    job.minPrice = streamReadFloat32(streamId)
+    job.group = streamReadString(streamId)
+    job.extraLoadMarkers = streamReadString(streamId)
+    job.steps = streamReadString(streamId)
+    job.prio = streamReadUInt8(streamId)
+    job.planIds = streamReadString(streamId)
     local placeableId = streamReadInt32(streamId)
     local vehicleId = streamReadInt32(streamId)
     if placeableId ~= 0 then
@@ -104,6 +137,21 @@ local function readJob(streamId)
         job.tripsDone = streamReadInt32(streamId)
         job.pauseLeft = streamReadInt32(streamId)
         job.tripsTotal = streamReadInt32(streamId)
+        job.price = streamReadFloat32(streamId)
+        job.standWhere = streamReadInt8(streamId)
+        job.restMarker = streamReadString(streamId)
+        job.seqIndex = streamReadInt8(streamId)
+        job.seqCount = streamReadInt8(streamId)
+        job.seqPhase = streamReadInt8(streamId)
+        job.seqPct = streamReadInt8(streamId)
+        job.planPos = streamReadInt32(streamId)
+        job.planOrder = streamReadInt32(streamId)
+        if job.planOrder <= 0 then
+            job.planOrder = nil
+        end
+        job.planCur = streamReadBool(streamId)
+        job.planVeh = streamReadString(streamId)
+        job.planVehName = streamReadString(streamId)
     end
     return job
 end
@@ -119,6 +167,9 @@ ADJChangeEvent.OP_DELETE = 2
 ADJChangeEvent.OP_TOGGLE = 3
 ADJChangeEvent.OP_REQUEST = 4
 ADJChangeEvent.OP_RESET = 5
+ADJChangeEvent.OP_SOURCE = 8     -- fixed storage of an AD target (job.loadMarker = target, job.placeableUid = storage, "" = automatic)
+ADJChangeEvent.OP_REORDER = 7    -- new order of the due jobs of one vehicle (job.planIds = "id,id,..", "R.." = automatic again)
+ADJChangeEvent.OP_PARK = 6       -- send the vehicle of the job (or job id 0: the vehicle object) to its park position, end the job
 
 function ADJChangeEvent.emptyNew()
     return Event.new(ADJChangeEvent_mt)
@@ -186,6 +237,16 @@ function ADJSyncEvent:writeStream(streamId, connection)
     for _, job in ipairs(self.jobs) do
         writeJob(streamId, job, true)
     end
+    -- fixed storages of AD targets
+    local names = {}
+    for name, _ in pairs(ADJobs.markerSources or {}) do
+        table.insert(names, name)
+    end
+    streamWriteUInt16(streamId, #names)
+    for _, name in ipairs(names) do
+        streamWriteString(streamId, name)
+        streamWriteString(streamId, ADJobs.markerSources[name] or "")
+    end
 end
 
 function ADJSyncEvent:readStream(streamId, connection)
@@ -197,8 +258,18 @@ function ADJSyncEvent:readStream(streamId, connection)
     for i = 1, n do
         jobs[i] = readJob(streamId)
     end
+    local sources = {}
+    local ns = streamReadUInt16(streamId)
+    for _ = 1, ns do
+        local name = streamReadString(streamId)
+        local uid = streamReadString(streamId)
+        if uid ~= "" then
+            sources[name] = uid
+        end
+    end
     if g_server == nil then
         ADJobs.jobs = jobs
+        ADJobs.markerSources = sources
     end
 end
 

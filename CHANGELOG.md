@@ -1,5 +1,47 @@
 # Changelog – AutoDrive Aufträge / AutoDrive Jobs
 
+## 1.6.2.0
+
+**Neu / New**
+- Reiter „Geplant“: je Fahrzeug der laufende Auftrag und die fälligen Aufträge in ihrer Reihenfolge; per Drag & Drop umsortieren, Rechtsklick = als Nächstes, „Auto“ = wieder automatisch
+  *"Planned" tab: per vehicle the running job and the due jobs in their order; reorder by drag & drop, right click = next, "Auto" = automatic again*
+- Knopf „L#“: Nummern L1, L2 … mit Inhalt über allen Lagern im Spiel; im Auftrag pro Ladeziel ein Lager fest zuordnen („Lager an …“), z. B. bei Heu- und Strohsilos nebeneinander
+  *"L#" button: numbers L1, L2 … with contents above every storage in the world; set one storage per load target in the job ("Storage at …"), e.g. hay and straw silos side by side*
+- Fahrweise „Ablauf (Courseplay)“: mehrere Schritte aus AD-Ziel und Courseplay-Kurs, optional mit Abladeziel (Ladewagen); Kursdateien werden im Multiplayer automatisch an den Server geschickt
+  *"Sequence (Courseplay)" mode: several steps of AD target and Courseplay course, optionally with an unload target (loader wagon); course files are sent to the server automatically in multiplayer*
+- Priorität 1–9 je Auftrag / *priority 1–9 per job*
+- Mehrere Ladeziele: ist das Lager an einem leer, geht es zum nächsten / *several load targets: if the storage at one is empty, the vehicle goes on to the next*
+- Gruppen (auf-/zuklappbar) und Aufträge kopieren; gleichnamige Gebäude bekommen eine Nummer („Kuhstall #2“)
+  *groups (collapsible) and copying jobs; buildings with the same name get a number ("Cow barn #2")*
+- Maus über Fahrzeug/Anhänger: Name, AD-Parkplatz und Auftrag / *mouse over a vehicle / trailer: name, AD park position and job*
+
+**Geändert / Changed**
+- Anderes Ladegut im Anhänger wird vor dem Start bei einem passenden Auftrag abgeliefert
+  *another fill type on the trailer is delivered to a fitting job before the start*
+- Abladeziel nimmt nichts an: nach 30 s Abbruch, Rest wird anderswo abgeladen / *unload target takes nothing: given up after 30 s, the rest goes elsewhere*
+- Ist das Lager an allen Ladezielen leer, startet der Auftrag nicht / *if the storage at all load targets is empty, the job does not start*
+- Status „steht seit … s“ mit Ort (Lade-/Abladeziel) / *status "standing for … s" with the place (load / unload target)*
+- Beendet AutoDrive die Fahrt zweimal direkt nach dem Start, pausiert der Auftrag mit Hinweis
+  *if AutoDrive ends the run twice right after the start, the job pauses with a hint*
+- Netzwerkversion 6 – Server und alle Spieler brauchen 1.6.2.0 / *network version 6 – server and all players need 1.6.2.0*
+
+## 1.6.0.0
+
+**Neu / New**
+- Regel „Abfuhr“: Start ab Y %, Stopp unter X % – z. B. Milch zur Molkerei; bestehende Aufträge bleiben „Versorgen“
+  *Rule "Haul away": start at Y %, stop below X % – e.g. milk to the dairy; existing jobs stay "Supply"*
+- Auftrags-Anhänger: Fahrzeug koppelt vor und nach dem Auftrag selbst um / *job trailer: the vehicle swaps trailers by itself before and after the job*
+- Mindestpreis für Abfuhr-Aufträge / *minimum price for haul away jobs*
+- Lager leer beim Laden: mit Teilladung los, danach parken / *source empty while loading: leave with the partial load, park afterwards*
+- Parken schicken: LStrg + LAlt + P und Park-Knopf je Auftrag im HUD / *send to park: LCtrl + LAlt + P and a park button per job in the HUD*
+
+**Geändert / Changed**
+- „Abholen und Liefern“ startet auch am Lade- oder Abladeziel; ein voller Anhänger fährt zuerst abladen
+  *"Pick up and deliver" also starts at the load or unload target; a full trailer delivers first*
+- Parkplatz und Ladeziel dürfen derselbe AD-Punkt sein / *park position and load target may be the same AD target*
+- Kein Notabladeplatz bei Abfuhr-Aufträgen / *no emergency unload point for haul away jobs*
+- Netzwerkversion 3 / *network version 3*
+
 ## 1.5.7.0
 
 **Behoben / Fixed**
