@@ -9,13 +9,19 @@
 -- The waypoint is where the TRAILER stands, so a vehicle without trailer "driving to" it reverses
 -- towards the drawbar of that trailer. The mod watches the distance of the couplings every frame,
 -- stops AutoDrive right before they touch and attaches (see updateSwapFast).
--- If another trailer hangs on the vehicle when the job wants to start, the vehicle swaps:
+-- If another trailer hangs on the vehicle when the job wants to start, the vehicle swaps - but only if the
+-- job trailer stands at B and hangs on no other vehicle (checked before the start and again right before
+-- driving to B; if it is gone by then, the vehicle attaches its own trailer again and waits):
 --   1. detach that trailer at A (where it stands)
 --   2. reverse towards B, attach the job trailer, start the run from there
 --   3. while the job trailer is on board the AD park position of the vehicle is redirected to B (the
 --      other trailer stands at A) - whoever parks it, AutoDrive or the player, it ends up at B
 --   4. as soon as the vehicle rests with the job trailer and the job does not need it: detach the job
 --      trailer at B, reverse towards A, attach the other trailer again, park position back to A
+--   4b. but only if the other trailer still stands at A and hangs on no other vehicle. Otherwise the
+--      vehicle does not swap: it drops the job trailer at B and parks alone at its own park position
+--      (A); without a park position it keeps the job trailer and waits.
+--      A vehicle that had no trailer before the run does the same: job trailer back to B, park alone.
 --
 -- Config fields of a job:   swapTrailerUid, swapMarker
 -- Runtime fields (saved):   job.returnTrailerUid (which trailer goes back on), job.parkRestore (own park position)
@@ -34,6 +40,9 @@ ADJobs.SWAP_TIMEOUT = 10 * 60000       -- ms a single swap phase may take before
 ADJobs.SWAP_STOP_DIST = 1.2            -- m between the couplings at which AutoDrive is stopped while reversing towards a trailer
 ADJobs.SWAP_STOP_SPEED = 12            -- km/h, above that the vehicle is stopped a bit earlier (braking distance)
 ADJobs.SWAP_IDLE_TIME = 60000          -- ms a vehicle with the job trailer must rest away from the stands before it swaps back by itself
+ADJobs.SWAP_SOLO = "-"                 -- returnTrailerUid of a vehicle that had no trailer before the run (it parks alone again)
+ADJobs.SWAP_TRAILER_AT_PLACE = 15      -- m, a trailer must stand this close to its AD park position to be fetched (root node of a semi trailer is a few m off)
+ADJobs.SWAP_FAIL_PAUSE = 10 * 60000    -- ms no new swap to the job trailer after attaching it failed
 
 -------------------------------------------------------------------------------------------------
 -- helpers
@@ -135,6 +144,45 @@ function ADJobs.findFreeTrailerAt(markerName, farmId, exclude)
         end
     end
     return best
+end
+
+--- may the trailer from before the run be fetched again? It must stand at the park position and must
+--- not hang on another vehicle. Returns true, or false + reason ("gone", "attached", "away")
+function ADJobs.returnTrailerAvailable(trailer, markerName, vehicle)
+    if trailer == nil or trailer.isDeleted or trailer.rootNode == nil then
+        return false, "gone"
+    end
+    local attacher = trailer.getAttacherVehicle ~= nil and trailer:getAttacherVehicle() or nil
+    if attacher ~= nil then
+        local root = attacher.getRootVehicle ~= nil and attacher:getRootVehicle() or attacher
+        if root ~= vehicle then
+            return false, "attached"
+        end
+    end
+    local idx = ADJobs.getMarkerIndexByName(markerName)
+    local marker = idx ~= nil and ADJobs.GM:getMapMarkerById(idx) or nil
+    local wp = marker ~= nil and ADJobs.GM:getWayPointById(marker.id) or nil
+    if wp == nil then
+        return false, "away"
+    end
+    local x, _, z = getWorldTranslation(trailer.rootNode)
+    if MathUtil.vector2Length(x - wp.x, z - wp.z) > ADJobs.SWAP_TRAILER_AT_PLACE then
+        return false, "away"
+    end
+    return true
+end
+
+--- log text for a trailer that is not fetched back
+function ADJobs.swapWhyText(why, trailer)
+    local name = trailer ~= nil and ADJobs.getVehicleName(trailer) or "Anhänger"
+    if why == "solo" then
+        return "vorher ohne Anhänger"
+    elseif why == "attached" then
+        return name .. " hängt an einer anderen Zugmaschine"
+    elseif why == "away" then
+        return name .. " steht nicht am Parkplatz"
+    end
+    return "Anhänger von vorher nicht gefunden"
 end
 
 --- the implements hanging directly on the vehicle (not what hangs on those)
@@ -401,15 +449,46 @@ function ADJobs.startSwap(job, vehicle, direction)
     local parkName = parkMarkerName(job, vehicle)
     local wantUid, dropMarker, pickMarker
     if direction == "out" then
+        -- the job trailer must stand at its stand and be free, otherwise do not even drop the own trailer
+        local jobTrailer = ADJobs.getSwapTrailer(cfg)
+        if jobTrailer ~= nil then
+            local okOut, why = ADJobs.returnTrailerAvailable(jobTrailer, ADJobs.getSwapMarker(cfg), vehicle)
+            if not okOut then
+                job.state, job.msgCode = ADJobs.ST_NOTREADY, 39
+                if job._swapBlockedWhy ~= "out" .. tostring(why) then
+                    job._swapBlockedWhy = "out" .. tostring(why)
+                    Logging.info("[AD Jobs] Auftrag %d '%s': kein Umkoppeln - %s", job.id, tostring(job.name), ADJobs.swapWhyText(why, jobTrailer))
+                end
+                return false
+            end
+            if job._swapFailUntil ~= nil and g_time < job._swapFailUntil then
+                job.state, job.msgCode = ADJobs.ST_ERROR, 21
+                return false
+            end
+        end
+        job._swapBlockedWhy = nil
         -- remember what hangs on the vehicle now, it comes back on after the job
         local current = directImplements(vehicle)[1]
-        job.returnTrailerUid = current ~= nil and current.getUniqueId ~= nil and current:getUniqueId() or ""
+        if current == nil then
+            -- (an own trailer still remembered from an aborted swap stays remembered)
+            if (job.returnTrailerUid or "") == "" then
+                job.returnTrailerUid = ADJobs.SWAP_SOLO
+            end
+        else
+            job.returnTrailerUid = current.getUniqueId ~= nil and current:getUniqueId() or ""
+        end
         wantUid, dropMarker, pickMarker = cfg.swapTrailerUid, parkName, ADJobs.getSwapMarker(cfg)
     else
         wantUid, dropMarker, pickMarker = job.returnTrailerUid, ADJobs.getSwapMarker(cfg), parkName
     end
-    local wanted = direction == "out" and ADJobs.getSwapTrailer(cfg) or ADJobs.getVehicleByUid(wantUid)
-    if wanted == nil and direction == "back" then
+    local solo = direction == "back" and wantUid == ADJobs.SWAP_SOLO
+    local wanted = nil
+    if direction == "out" then
+        wanted = ADJobs.getSwapTrailer(cfg)
+    elseif not solo then
+        wanted = ADJobs.getVehicleByUid(wantUid)
+    end
+    if wanted == nil and direction == "back" and not solo then
         -- id of the trailer from before the run does not resolve (changed between sessions?):
         -- take the free trailer standing at the park position
         wanted = ADJobs.findFreeTrailerAt(parkName, job.farmId, ADJobs.getSwapTrailer(cfg))
@@ -419,7 +498,31 @@ function ADJobs.startSwap(job, vehicle, direction)
             job.returnTrailerUid = wantUid
         end
     end
-    if wanted == nil then
+    local parkOnly = false
+    if direction == "back" then
+        -- the trailer from before the run must still stand at the park position and be free; otherwise do
+        -- not swap: drop the job trailer at its stand and park the vehicle alone (if it has a park position)
+        local okBack, why = ADJobs.returnTrailerAvailable(wanted, parkName, vehicle)
+        if solo then
+            okBack, why = false, "solo"
+        end
+        if not okBack then
+            local parkIdx = ADJobs.getMarkerIndexByName(parkName)
+            if parkIdx == nil or parkName == ADJobs.getSwapMarker(cfg) then
+                if job._swapBlockedWhy ~= why then
+                    job._swapBlockedWhy = why
+                    Logging.info("[AD Jobs] Auftrag %d '%s': kein Zurückkoppeln (%s) und kein Parkplatz für %s - Auftrags-Anhänger bleibt dran",
+                        job.id, tostring(job.name), ADJobs.swapWhyText(why, wanted), ADJobs.getVehicleName(vehicle))
+                end
+                return false
+            end
+            parkOnly = true
+            Logging.info("[AD Jobs] Auftrag %d '%s': kein Zurückkoppeln (%s) - %s stellt den Auftrags-Anhänger bei '%s' ab und parkt allein bei '%s'",
+                job.id, tostring(job.name), ADJobs.swapWhyText(why, wanted), ADJobs.getVehicleName(vehicle), tostring(dropMarker), tostring(parkName))
+        end
+        job._swapBlockedWhy = nil
+    end
+    if wanted == nil and not parkOnly then
         job.state, job.msgCode = ADJobs.ST_ERROR, 23
         ADJobs.logVehicleIds(string.format("Auftrag %d '%s': Anhänger mit UID '%s' (%s) nicht gefunden", job.id, tostring(job.name), tostring(wantUid),
             direction == "out" and tostring(cfg.swapTrailerName) or "Rückkoppeln"))
@@ -433,10 +536,13 @@ function ADJobs.startSwap(job, vehicle, direction)
         return false
     end
     job.swap = {direction = direction, wantUid = wantUid, dropMarker = dropMarker, pickMarker = pickMarker,
-        phase = "toDrop", since = g_time, adSeen = false}
+        phase = "toDrop", since = g_time, adSeen = false, parkOnly = parkOnly}
     job._veh = vehicle
     job.state, job.msgCode = ADJobs.ST_SWAP, 0
     ADJobs.lastSyncKey = nil
+    if parkOnly then
+        return true
+    end
     Logging.info("[AD Jobs] Auftrag %d '%s': %s koppelt um (%s): Anhänger ab bei '%s', %s an bei '%s'", job.id, tostring(job.name),
         ADJobs.getVehicleName(vehicle), direction, tostring(dropMarker), ADJobs.getVehicleName(ADJobs.getVehicleByUid(wantUid)), tostring(pickMarker))
     return true
@@ -474,6 +580,30 @@ local function finishSwap(job, state)
     job.state, job.msgCode = state, 0
 end
 
+--- the swap to the job trailer can not be finished (job trailer taken meanwhile, attach failed):
+--- put the own trailer back on (it stands at the drop place), or - without one - drive back to park
+local function abortOut(job, vehicle, code, reason)
+    local swap = job.swap
+    local own = job.returnTrailerUid
+    Logging.info("[AD Jobs] Auftrag %d '%s': Umkoppeln abgebrochen (%s) - %s", job.id, tostring(job.name), tostring(reason),
+        (own ~= nil and own ~= "" and own ~= ADJobs.SWAP_SOLO) and "eigenen Anhänger wieder ankoppeln" or "zurück zum Parkplatz")
+    if own == nil or own == "" or own == ADJobs.SWAP_SOLO or ADJobs.getVehicleByUid(own) == nil then
+        local back = swap.dropMarker
+        ADJobs.clearSwapCycle(job, vehicle)
+        finishSwap(job, ADJobs.ST_NOTREADY)
+        job.msgCode = code
+        if back ~= nil and not isNearMarkerName(vehicle, back, ADJobs.PARK_DISTANCE) then
+            ADJobs.driveToMarker(vehicle, back)
+        end
+        return
+    end
+    swap.abortOut = true
+    swap.abortCode = code
+    swap.wantUid = own
+    swap.pickMarker = swap.dropMarker
+    phaseTo(job, "toPick")
+end
+
 --- one tick of the swap; returns true while the swap decides the job state
 function ADJobs.updateSwap(job)
     local swap = job.swap
@@ -502,7 +632,7 @@ function ADJobs.updateSwap(job)
     local wanted = ADJobs.getVehicleByUid(swap.wantUid)
 
     if swap.phase == "toDrop" then
-        if ADJobs.hasTrailerUid(vehicle, swap.wantUid) then
+        if not swap.parkOnly and ADJobs.hasTrailerUid(vehicle, swap.wantUid) then
             -- the right one already hangs there (player did it by hand)
             finishSwap(job, job.active and ADJobs.ST_WAIT or ADJobs.ST_OFF)
             if swap.direction == "back" then
@@ -513,8 +643,8 @@ function ADJobs.updateSwap(job)
             return false
         end
         if #directImplements(vehicle) == 0 then
-            -- nothing to drop: straight to the pick-up
-            phaseTo(job, "toPick")
+            -- nothing to drop: straight to the pick-up (or to the park position)
+            phaseTo(job, swap.parkOnly and "toPark" or "toPick")
             return true
         end
         -- "out": the vehicle already rests at the park position (that is where the other trailer stays);
@@ -530,11 +660,30 @@ function ADJobs.updateSwap(job)
     elseif swap.phase == "detach" then
         if ADJobs.detachAll(vehicle) then
             Logging.info("[AD Jobs] Auftrag %d '%s': Anhänger bei '%s' abgekoppelt", job.id, tostring(job.name), tostring(swap.dropMarker))
-            phaseTo(job, "toPick")
+            phaseTo(job, swap.parkOnly and "toPark" or "toPick")
         end
         -- otherwise: isDetachAllowed() false (unloading, cover open ...) - wait
 
     elseif swap.phase == "toPick" then
+        if swap.direction == "out" and not swap.abortOut and not swap.adSeen then
+            -- the job trailer was taken / attached by someone since the start: do not drive there
+            local okOut, why = ADJobs.returnTrailerAvailable(wanted, swap.pickMarker, vehicle)
+            if not okOut then
+                abortOut(job, vehicle, 39, ADJobs.swapWhyText(why, wanted))
+                return true
+            end
+        end
+        if swap.direction == "back" and not swap.adSeen then
+            -- the trailer from before the run was taken away / attached by someone meanwhile: park alone
+            local okBack, why = ADJobs.returnTrailerAvailable(wanted, swap.pickMarker, vehicle)
+            if not okBack then
+                Logging.info("[AD Jobs] Auftrag %d '%s': kein Zurückkoppeln (%s) - %s parkt allein bei '%s'", job.id, tostring(job.name),
+                    ADJobs.swapWhyText(why, wanted), ADJobs.getVehicleName(vehicle), tostring(swap.pickMarker))
+                swap.parkOnly = true
+                phaseTo(job, "toPark")
+                return true
+            end
+        end
         if wanted == nil then
             finishSwap(job, ADJobs.ST_ERROR)
             job.msgCode = 23
@@ -559,6 +708,25 @@ function ADJobs.updateSwap(job)
             job.msgCode = 10
         end
 
+    elseif swap.phase == "toPark" then
+        -- alone (job trailer dropped at its stand) to the park position of the vehicle
+        if not swap.parkSet then
+            swap.parkSet = true
+            ADJobs.restoreParkAfterSwap(job, vehicle)
+            ADJobs.setParkDestination(vehicle, ADJobs.getMarkerIndexByName(swap.pickMarker))
+        end
+        local r = driveStep(job, vehicle, swap.pickMarker, ADJobs.PARK_DISTANCE)
+        if r == "arrived" then
+            ADJobs.clearSwapCycle(job, vehicle)
+            finishSwap(job, job.active and ADJobs.ST_WAIT or ADJobs.ST_OFF)
+            Logging.info("[AD Jobs] Auftrag %d '%s': %s steht ohne Anhänger am Parkplatz '%s'", job.id, tostring(job.name),
+                ADJobs.getVehicleName(vehicle), tostring(swap.pickMarker))
+            return false
+        elseif r == "failed" then
+            finishSwap(job, ADJobs.ST_ERROR)
+            job.msgCode = 10
+        end
+
     elseif swap.phase == "attach" then
         if not vehicleStands(vehicle) then
             return true
@@ -568,13 +736,28 @@ function ADJobs.updateSwap(job)
             Logging.info("[AD Jobs] Auftrag %d '%s': %s bei '%s' angekoppelt", job.id, tostring(job.name), ADJobs.getVehicleName(wanted), tostring(swap.pickMarker))
             phaseTo(job, "settle")
         else
-            finishSwap(job, ADJobs.ST_ERROR)
-            job.msgCode = 21
             Logging.warning("[AD Jobs] Auftrag %d '%s': Ankoppeln fehlgeschlagen (%s)", job.id, tostring(job.name), tostring(reason))
+            if swap.direction == "out" and not swap.abortOut then
+                -- no endless tries: the next swap to the job trailer only after a pause
+                job._swapFailUntil = g_time + ADJobs.SWAP_FAIL_PAUSE
+                abortOut(job, vehicle, reason == "attachedElsewhere" and 39 or 21, "Ankoppeln fehlgeschlagen: " .. tostring(reason))
+            else
+                finishSwap(job, ADJobs.ST_ERROR)
+                job.msgCode = 21
+            end
         end
 
     elseif swap.phase == "settle" then
         if g_time - swap.since >= ADJobs.SWAP_SETTLE_TIME then
+            if swap.abortOut then
+                -- own trailer is on again, the vehicle stands at its park position: wait for the job trailer
+                local code = swap.abortCode or 39
+                ADJobs.clearSwapCycle(job, vehicle)
+                finishSwap(job, ADJobs.ST_NOTREADY)
+                job.msgCode = code
+                Logging.info("[AD Jobs] Auftrag %d '%s': %s hat den eigenen Anhänger wieder dran", job.id, tostring(job.name), ADJobs.getVehicleName(vehicle))
+                return false
+            end
             if swap.direction == "out" then
                 -- done: the vehicle stands at the stand of the job trailer, the normal start logic takes over
                 -- in this tick (checkReady accepts that stand as start position). From now on the vehicle

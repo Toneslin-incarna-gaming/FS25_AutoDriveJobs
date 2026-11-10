@@ -420,7 +420,7 @@ local function parkVehicleText(parkName, farmId)
             -- the vehicle that would be started (nearest to the park position) with its trailer
             table.insert(names, ADJobs.getVehicleName(e.vehicle) .. " " .. ADJobs.getImplementText(e.vehicle))
         end
-        if e.dist <= ADJobs.PARK_DISTANCE then
+        if e.dist <= ADJobs.PARK_DISTANCE and ADJobs.isCombinationNearMarker(e.vehicle, idx) then
             atPark = true
         end
     end
@@ -460,7 +460,7 @@ function H.loadPosition()
         H.x = getXMLFloat(xml, "adJobsHud#x") or H.x
         H.top = getXMLFloat(xml, "adJobsHud#top") or H.top
         local tab = getXMLString(xml, "adJobsHud#tab")
-        if tab == "jobs" or tab == "plan" then
+        if tab == "jobs" or tab == "plan" or tab == "storages" then
             H.tab = tab
         end
         local i = 0
@@ -932,7 +932,11 @@ end
 function H.drawTabs(x, top, w)
     local h = M.tabH
     local y = top - h
-    local tabs = {{"jobs", txt("tabJobs", #ADJobs.jobs)}, {"plan", txt("tabPlan", planCount())}}
+    local nSources = 0
+    for _, _ in pairs(ADJobs.markerSources or {}) do
+        nSources = nSources + 1
+    end
+    local tabs = {{"jobs", txt("tabJobs", #ADJobs.jobs)}, {"plan", txt("tabPlan", planCount())}, {"storages", txt("tabStorages", nSources)}}
     local tx = x + M.gapX
     for _, t in ipairs(tabs) do
         local key, label = t[1], t[2]
@@ -952,6 +956,7 @@ function H.drawTabs(x, top, w)
             if H.tab ~= key then
                 H.tab = key
                 H.dnd = nil
+                H.open = nil
                 H.savePosition()
             end
         end)
@@ -1520,11 +1525,8 @@ local function parkEntries(d)
                 if i <= 2 then
                     table.insert(names, ADJobs.getVehicleName(v) .. " " .. ADJobs.getImplementText(v))
                 end
-                if wp ~= nil then
-                    local x, _, z = getWorldTranslation(v.rootNode)
-                    if MathUtil.vector2Length(x - wp.x, z - wp.z) <= ADJobs.PARK_DISTANCE then
-                        atPark = true
-                    end
+                if wp ~= nil and ADJobs.isCombinationNearMarker(v, idx) then
+                    atPark = true
                 end
             end
             local sub = table.concat(names, ", ")
@@ -1613,6 +1615,9 @@ local function sourceValue(d, markerName)
     if fixed ~= nil then
         return ADJobs.getStorageTitle(fixed) .. "  -  " .. contentsText(fixed.p, 2)
     end
+    if ADJobs.markerSources[markerName] ~= nil then
+        return txt("srcMissing")
+    end
     local ft = sourceFt(d)
     if ft == nil then
         return txt("srcAutoEntry", ADJobs.SOURCE_RADIUS)
@@ -1625,13 +1630,14 @@ end
 local function sourceEntries(d, markerName)
     local ft, ftName = sourceFt(d)
     local cur = ADJobs.markerSources[markerName]
+    local curE = ADJobs.getStorageByUid(cur)
     local entries = {{label = txt("srcAutoEntry", ADJobs.SOURCE_RADIUS), value = "", sort = "", group = txt("grpAuto"), selected = cur == nil}}
     local mx, mz = ADJobs.getMarkerPosition(markerName)
     for _, e in ipairs(ADJobs.getStoragePlaceables()) do
         local dist = mx ~= nil and MathUtil.vector2Length(e.x - mx, e.z - mz) or 0
         local level = ft ~= nil and ADJobs.measurePlaceableFt(e.p, ft) or nil
         local near = dist <= 2 * ADJobs.SOURCE_RADIUS
-        if e.uid ~= "" and (near or level ~= nil or e.uid == cur) then
+        if near or level ~= nil or e == curE or ft == nil then
             local amount
             if level ~= nil then
                 amount = string.format("%s %d l", fillTypeTitle(ftName), math.floor(level))
@@ -1645,11 +1651,175 @@ local function sourceEntries(d, markerName)
                     amount = txt("srcNoFt", fillTypeTitle(ftName)) .. ": " .. amount
                 end
             end
-            table.insert(entries, {label = string.format("%s  -  %s  (%d m)", ADJobs.getStorageTitle(e), amount, math.floor(dist)), value = e.uid,
-                sort = string.format("%08d", math.floor(dist)), group = near and txt("srcGrpNear") or txt("srcGrpOther"), selected = e.uid == cur})
+            table.insert(entries, {label = string.format("%s  -  %s  (%d m)", ADJobs.getStorageTitle(e), amount, math.floor(dist)), value = e.key,
+                sort = string.format("%08d", math.floor(dist)), group = near and txt("srcGrpNear") or txt("srcGrpOther"), selected = e == curE})
         end
     end
     return sortEntries(entries, {txt("grpAuto"), txt("srcGrpNear"), txt("srcGrpOther")})
+end
+
+-------------------------------------------------------------------------------------------------
+-- "Lager" tab: storage of AD targets without opening a job
+-------------------------------------------------------------------------------------------------
+
+H.storageExtra = {}   -- AD targets added in the "Lager" tab (listed until the game is closed)
+H.storageScroll = 0
+H.storageClosed = {}  -- [group] = true when collapsed
+
+--- removes the fixed storage of an AD target (automatic again)
+local function clearSource(name)
+    if ADJobs.markerSources[name] ~= nil then
+        ADJobs.setMarkerSource(name, "")
+        ADJChangeEvent.sendEvent(ADJChangeEvent.OP_SOURCE, {id = 0, loadMarker = name, placeableUid = ""})
+    end
+    H.storageExtra[name] = nil
+end
+
+--- group of an AD target in the tab: the fill type its jobs load, else what its storage holds
+local function storageGroupOf(t)
+    if t.ftName ~= nil then
+        return fillTypeTitle(t.ftName)
+    end
+    local fixed = ADJobs.getStorageByUid(ADJobs.markerSources[t.name])
+    if fixed ~= nil then
+        local c = ADJobs.getStorageContents(fixed.p)[1]
+        local fillType = c ~= nil and g_fillTypeManager:getFillTypeByIndex(c.ft) or nil
+        if fillType ~= nil then
+            return tostring(fillType.title)
+        end
+    end
+    return txt("storGrpOther")
+end
+
+--- AD targets of the tab: load targets of all jobs, targets with a storage set, targets added by hand
+local function storageTargets()
+    local byName, order = {}, {}
+    local function add(name, job)
+        if name == nil or name == "" then
+            return
+        end
+        local t = byName[name]
+        if t == nil then
+            t = {name = name, jobs = {}}
+            byName[name] = t
+            table.insert(order, t)
+        end
+        if job ~= nil then
+            table.insert(t.jobs, job)
+            local n = (job.loadFillTypeName or "") ~= "" and job.loadFillTypeName or job.fillTypeName
+            if t.ftName == nil and (n or "") ~= "" then
+                t.ftName = n
+            end
+        end
+    end
+    for _, job in ipairs(ADJobs.jobs) do
+        if job.driveMode ~= "sequence" then
+            for _, n in ipairs(ADJobs.getLoadMarkers(job)) do
+                add(n, job)
+            end
+        end
+    end
+    for name, _ in pairs(ADJobs.markerSources or {}) do
+        add(name)
+    end
+    for name, _ in pairs(H.storageExtra) do
+        add(name)
+    end
+    table.sort(order, function(a, b)
+        return a.name:lower() < b.name:lower()
+    end)
+    return order
+end
+
+--- "+ add load target": every other AD target, nearest to the camera first
+local function storageAddEntries()
+    local shown = {}
+    for _, t in ipairs(storageTargets()) do
+        shown[t.name] = true
+    end
+    local cx, cz = cameraPosition()
+    local entries = {}
+    for _, m in ipairs(getMarkers()) do
+        if not shown[m.name] then
+            local dist = MathUtil.vector2Length(m.x - cx, m.z - cz)
+            table.insert(entries, {label = m.name, sub = string.format("%d m", math.floor(dist)), value = m.name, sort = dist, group = m.group})
+        end
+    end
+    return sortEntries(entries, {txt("grpDefault")})
+end
+
+--- rows of the tab: grouped by fill type, one per AD target (pull down = its storage), last row adds a target
+local function storageRows()
+    local rows = {}
+    local groups, order = {}, {}
+    for _, t in ipairs(storageTargets()) do
+        local g = storageGroupOf(t)
+        if groups[g] == nil then
+            groups[g] = {}
+            table.insert(order, g)
+        end
+        table.insert(groups[g], t)
+    end
+    local other = txt("storGrpOther")
+    table.sort(order, function(a, b)
+        if (a == other) ~= (b == other) then
+            return b == other
+        end
+        return a:lower() < b:lower()
+    end)
+    for _, g in ipairs(order) do
+        local fixedCount = 0
+        for _, t in ipairs(groups[g]) do
+            if ADJobs.markerSources[t.name] ~= nil then
+                fixedCount = fixedCount + 1
+            end
+        end
+        local closed = H.storageClosed[g] == true
+        table.insert(rows, {key = "grp|" .. g, header = true, label = string.format("%s  %s  (%d)", closed and "+" or "-", g, #groups[g]),
+            summary = txt("storGrpFixed", fixedCount, #groups[g]), click = function()
+                H.storageClosed[g] = not closed or nil
+                H.open = nil
+            end})
+        if not closed then
+            for _, t in ipairs(groups[g]) do
+                rows[#rows + 1] = t
+            end
+        end
+    end
+    local targets = rows
+    rows = {}
+    for _, t in ipairs(targets) do
+      if t.header then
+        table.insert(rows, t)
+      else
+        local name = t.name
+        local pseudo = {loadFillTypeName = t.ftName}
+        local users = {}
+        for _, j in ipairs(t.jobs) do
+            table.insert(users, tostring(j.name))
+        end
+        table.insert(rows, {key = "src|" .. name, icon = "zoom", fb = "L", label = name, value = sourceValue(pseudo, name),
+            hint = (#users > 0 and txt("storUsedBy", table.concat(users, ", ")) or txt("storUnused")) .. "  ·  " .. txt("storRightHint"),
+            list = function()
+                return sourceEntries(pseudo, name)
+            end,
+            select = function(e)
+                ADJobs.setMarkerSource(name, e.value)
+                ADJChangeEvent.sendEvent(ADJChangeEvent.OP_SOURCE, {id = 0, loadMarker = name, placeableUid = e.value})
+            end,
+            right = function()
+                clearSource(name)
+            end})
+      end
+    end
+    table.insert(rows, {key = "storAdd", icon = "plusSign", fb = "+", label = txt("storAdd"), value = txt("storAddValue"), hint = txt("storAddHint"),
+        list = storageAddEntries,
+        select = function(e)
+            H.storageExtra[e.value] = true
+            -- the storage list of the new target opens right away
+            H.pendingOpen = "src|" .. e.value
+        end})
+    return rows
 end
 
 --- all AD targets except the unload target; ticked ones first with their number
@@ -2250,6 +2420,12 @@ local function editorRows(d)
                 -- applies to all jobs with this target: sent right away (not only with "save")
                 ADJobs.setMarkerSource(markerName, e.value)
                 ADJChangeEvent.sendEvent(ADJChangeEvent.OP_SOURCE, {id = 0, loadMarker = markerName, placeableUid = e.value})
+            end,
+            right = function()
+                if ADJobs.markerSources[markerName] ~= nil then
+                    ADJobs.setMarkerSource(markerName, "")
+                    ADJChangeEvent.sendEvent(ADJChangeEvent.OP_SOURCE, {id = 0, loadMarker = markerName, placeableUid = ""})
+                end
             end})
     end
 
@@ -2491,31 +2667,77 @@ local function drawPulldown(row, fx, fy, fw, fh)
     end
 end
 
-function H.drawEditor()
-    local d = H.draft
-    local rows = editorRows(d)
-    local missing = H.showMissing and missingFields(d) or {}
+--- mode nil: the job editor (H.draft); mode "storages": the "Lager" tab (same rows and pull down lists)
+function H.drawEditor(mode)
+    local storageMode = mode == "storages"
+    local d = storageMode and {id = -1} or H.draft
+    local rows = storageMode and storageRows() or editorRows(d)
+    local missing = (not storageMode and H.showMissing) and missingFields(d) or {}
+    local maxScroll = 0
+    if storageMode then
+        -- the tab can get long: scroll it with the mouse wheel
+        maxScroll = math.max(0, #rows - MAX_LIST_ROWS)
+        -- a list that should open by itself: scroll its row into view
+        if H.pendingOpen ~= nil then
+            for i, row in ipairs(rows) do
+                if row.key == H.pendingOpen and (i <= H.storageScroll or i > H.storageScroll + MAX_LIST_ROWS) then
+                    H.storageScroll = i - 1
+                end
+            end
+        end
+        H.storageScroll = math.max(0, math.min(H.storageScroll, maxScroll))
+        local part = {}
+        for i = H.storageScroll + 1, math.min(#rows, H.storageScroll + MAX_LIST_ROWS) do
+            table.insert(part, rows[i])
+        end
+        rows = part
+    end
     local buttonH = M.py(24)
-    local totalH = M.headerH + M.gapY + #rows * M.rowH + M.gapY * 2 + buttonH + M.gapY * 2
+    local tabSpace = storageMode and (M.tabH + M.gapY) or 0
+    local buttonSpace = storageMode and 0 or (buttonH + M.gapY * 2)
+    local totalH = M.headerH + M.gapY + tabSpace + #rows * M.rowH + M.gapY * 2 + buttonSpace
     clampPosition(totalH)
     local x, top, w = H.x, H.top, M.w
     local bottom = top - totalH
     H.area = {x = x, y = bottom, w = w, h = totalH}
     drawBackground(x, bottom, w, totalH)
     addBox(x, bottom, w, totalH, function()
-    end)
+    end, storageMode and function(dir)
+        H.storageScroll = H.storageScroll - dir
+    end or nil)
 
     -- hover hint of a row (previous frame) is shown in the header, like the tool tips of the list
     local hint = H.nextHint
     H.nextHint = nil
-    drawHeader(x, top, w, hint or (d.id == 0 and txt("hudNew") or string.format("%s: %s", txt("hudEdit"), tostring(d.name))), {
-        {"input_toggleHud_1", "X", function()
-            H.closeEditor()
-        end},
-        {nil, nil, function()
-            H.showStorages = not H.showStorages
-        end, text = "L#", on = H.showStorages, tip = txt("tipStorageNums")},
-    })
+    local storageButton = {nil, nil, function()
+        H.showStorages = not H.showStorages
+    end, text = "L#", on = H.showStorages, tip = txt("tipStorageNums")}
+    if storageMode then
+        local tip = H.nextTooltip
+        H.nextTooltip = nil
+        local title = hint or tip or txt("title")
+        if maxScroll > 0 then
+            title = string.format("%s  (%d / %d)", title, H.storageScroll + 1, maxScroll + 1)
+        end
+        drawHeader(x, top, w, title, {
+            {"input_toggleHud_1", "X", function()
+                ADJobs.toggleHud()
+            end},
+            {"plusSign", "+", function()
+                H.newJob()
+            end},
+            storageButton,
+        })
+        H.drawTabs(x, top - M.headerH - M.gapY, w)
+    else
+        drawHeader(x, top, w, hint or (d.id == 0 and txt("hudNew") or string.format("%s: %s", txt("hudEdit"), tostring(d.name))), {
+            {"input_toggleHud_1", "X", function()
+                H.closeEditor()
+            end},
+            storageButton,
+        })
+    end
+    local rowsTop = top - M.headerH - M.gapY - tabSpace
 
     local openRow, openGeo = nil, nil
     local fieldX = x + 2 * M.gapX + M.iconW
@@ -2533,15 +2755,30 @@ function H.drawEditor()
     H.occluder = nil
     for i, row in ipairs(rows) do
         if H.open == row.key and row.list ~= nil then
-            local rowTop = top - M.headerH - M.gapY - (i - 1) * M.rowH
+            local rowTop = rowsTop - (i - 1) * M.rowH
             local iy = rowTop - (M.rowH - M.iconH) / 2 - M.iconH
             local _, _, ly, listH = pulldownGeometry(row, fieldX, iy, fieldW, M.iconH)
             H.occluder = {x = fieldX, y = ly, w = x + w - fieldX, h = listH}
         end
     end
     for i, row in ipairs(rows) do
-        local rowTop = top - M.headerH - M.gapY - (i - 1) * M.rowH
+        local rowTop = rowsTop - (i - 1) * M.rowH
         local iy = rowTop - (M.rowH - M.iconH) / 2 - M.iconH
+      if row.header then
+        -- group line ("Lager" tab): click = open / close
+        local hy, hh = rowTop - M.rowH + M.gapY / 2, M.rowH - M.gapY
+        local hover = isInside(x + M.gapX, hy, w - 2 * M.gapX, hh) and H.open == nil
+        drawFilledRect(x + M.gapX, hy, w - 2 * M.gapX, hh, C_SPECIAL[1], C_SPECIAL[2], C_SPECIAL[3], hover and 0.25 or 0.14)
+        local sumW = 0
+        if row.summary ~= nil then
+            sumW = getTextWidth(M.small, row.summary)
+            drawText(x + w - 3 * M.gapX, textY(hy, hh, M.small), M.small, row.summary, C_GREY, false, RenderText.ALIGN_RIGHT)
+        end
+        drawText(x + 3 * M.gapX, textY(hy, hh, M.font), M.font, fit(row.label, w - sumW - 8 * M.gapX, M.font), hover and C_HOVER or C_SPECIAL, true)
+        addBox(x + M.gapX, hy, w - 2 * M.gapX, hh, row.click, storageMode and function(dir)
+            H.storageScroll = H.storageScroll - dir
+        end or nil)
+      else
         -- icon on the left (like the AutoDrive HUD)
         if not drawSlice(row.icon, x + M.gapX, iy, M.iconW, M.iconH) then
             drawFilledRect(x + M.gapX, iy, M.iconW, M.iconH, 0.32, 0.32, 0.32, 0.95)
@@ -2617,15 +2854,19 @@ function H.drawEditor()
                 elseif row.click ~= nil then
                     row.click()
                 end
-            end)
+            end, storageMode and function(dir)
+                H.storageScroll = H.storageScroll - dir
+            end or nil, row.right)
         end
 
         if H.open == row.key then
             openRow, openGeo = row, {fieldX, fy, fw, fh}
         end
+      end
     end
 
-    -- buttons at the bottom
+    -- buttons at the bottom (job editor only)
+    if not storageMode then
     local by = bottom + 2 * M.gapY
     local count = d.id ~= 0 and 4 or 2
     local bw = (w - (count + 1) * 2 * M.gapX) / count
@@ -2646,6 +2887,7 @@ function H.drawEditor()
         textButton(bx, by, bw, buttonH, txt("resetShort"), function()
             ADJChangeEvent.sendEvent(ADJChangeEvent.OP_RESET, {id = d.id})
         end)
+    end
     end
 
     -- the expanded list is drawn last (on top of everything)
@@ -2690,6 +2932,8 @@ function H.draw()
         H.pdArea = nil
         if H.tab == "plan" then
             H.drawPlan()
+        elseif H.tab == "storages" then
+            H.drawEditor("storages")
         else
             H.drawList()
         end
@@ -2847,9 +3091,12 @@ function H.drawStorageNumbers()
     end
     local cx, cy, cz = getWorldTranslation(camera)
     local assigned = {}
-    for name, uid in pairs(ADJobs.markerSources or {}) do
-        assigned[uid] = assigned[uid] or {}
-        table.insert(assigned[uid], name)
+    for name, key in pairs(ADJobs.markerSources or {}) do
+        local e = ADJobs.getStorageByUid(key)
+        if e ~= nil then
+            assigned[e.p] = assigned[e.p] or {}
+            table.insert(assigned[e.p], name)
+        end
     end
     for _, e in ipairs(ADJobs.getStoragePlaceables()) do
         local x, y, z = ADJobs.getStorageLabelPos(e.p)
@@ -2859,10 +3106,10 @@ function H.drawStorageNumbers()
             if sd ~= nil and sd > 0 and sd < 1 and sx > 0 and sx < 1 and sy > 0 and sy < 1 then
                 local lines = {{text = "L" .. e.num, size = M.font * (dist < 80 and 1.9 or 1.4), color = C_HOVER, bold = true}}
                 if dist < 150 then
-                    table.insert(lines, {text = tostring(ADJobs.getPlaceableLabel(e.p) or "?"), size = M.small, color = C_TEXT, bold = true})
+                    table.insert(lines, {text = tostring(e.p.getName ~= nil and e.p:getName() or "?"), size = M.small, color = C_TEXT, bold = true})
                     table.insert(lines, {text = contentsText(e.p, 3), size = M.small, color = C_GREY})
                 end
-                local names = assigned[e.uid]
+                local names = assigned[e.p]
                 if names ~= nil then
                     table.sort(names)
                     table.insert(lines, {text = "<- " .. table.concat(names, ", "), size = M.small, color = C_SPECIAL, bold = true})

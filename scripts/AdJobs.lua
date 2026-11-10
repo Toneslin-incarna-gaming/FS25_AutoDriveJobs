@@ -34,6 +34,7 @@ ADJobs.SYNC_INTERVAL = 5000      -- ms between two status updates to the clients
 ADJobs.WATCH_INTERVAL = 250      -- ms between two checks of the loading / unloading progress of a running job
 ADJobs.START_GRACE = 15000       -- ms after a start in which an inactive AD is not seen as "finished"
 ADJobs.PARK_DISTANCE = 25        -- m, vehicle must be this close to its park position to be started
+ADJobs.TRAILER_PARK_DISTANCE = 25 -- m, every attached trailer / implement must be this close too (whole combination there)
 ADJobs.STABLE_TIME = 15000       -- ms the watched level must be unchanged before a "load" job starts (no overloading going on)
 ADJobs.LOOP_RESTORE_TIMEOUT = 60000 -- ms after loading a savegame in which the loop counter of a vehicle is restored
 ADJobs.CONSUMABLES = {DIESEL = true, DEF = true, AIR = true, ELECTRICCHARGE = true, METHANE = true, SILAGE_ADDITIVE = true}
@@ -100,7 +101,7 @@ local TEXTS = {
     msg3 = {"Ladeziel nicht gefunden", "load target not found"},
     msg4 = {"Abladeziel nicht gefunden", "unload target not found"},
     msg5 = {"am Fahrzeug ist kein AD-Parkplatz gesetzt", "no AD park position set for the vehicle"},
-    msg6 = {"Fahrzeug steht weder am Parkplatz noch am Lade-/Abladeziel", "vehicle is neither at its park position nor at the load / unload target"},
+    msg6 = {"Fahrzeug mit Anhänger steht weder am Parkplatz noch am Lade-/Abladeziel", "vehicle with trailer is neither at its park position nor at the load / unload target"},
     msg7 = {"Fahrzeug ist beschäftigt", "vehicle is busy"},
     msg8 = {"kein Anhänger / kein Laderaum", "no trailer / no load space"},
     msg9 = {"Messwert nicht lesbar", "value not readable"},
@@ -133,7 +134,7 @@ local TEXTS = {
     msg13 = {"Parkplatz nicht gefunden", "park position not found"},
     msg14 = {"kein Fahrzeug hat diesen Parkplatz zugewiesen", "no vehicle has this park position assigned"},
     msg15 = {"zu wenig Platz im Lager", "not enough space in the storage"},
-    msg16 = {"Fahrzeug steht nicht am Parkplatz oder Warteplatz", "vehicle is not at its park position or waiting place"},
+    msg16 = {"Fahrzeug mit Anhänger steht nicht am Parkplatz oder Warteplatz", "vehicle with trailer is not at its park position or waiting place"},
     msg17 = {"der überwachte Anhänger hängt nicht an diesem Fahrzeug", "the watched trailer is not attached to this vehicle"},
     msg18 = {"angehängtes Gerät passt nicht zum Ladegut", "attached implement does not fit the fill type"},
     msg19 = {"AutoDrive 'Ziele rotieren' am Fahrzeug ausschalten", "turn off AutoDrive 'rotate targets' for this vehicle"},
@@ -181,6 +182,8 @@ local TEXTS = {
     msg21 = {"Ankoppeln fehlgeschlagen - steht der Anhänger auf seinem AD-Parkplatz?", "attach failed - is the trailer at its AD park position?"},
     msg22 = {"Umkoppeln abgebrochen (Zeitüberschreitung)", "trailer swap aborted (timeout)"},
     msg23 = {"Auftrags-Anhänger nicht gefunden (verkauft?)", "job trailer not found (sold?)"},
+    msg39 = {"Auftrags-Anhänger steht nicht auf seinem AD-Parkplatz oder hängt an einer anderen Zugmaschine - kein Umkoppeln", "job trailer is not at its AD park position or hangs on another vehicle - no swap"},
+    msg40 = {"Anhänger steht nicht mit am Parkplatz / Ziel - Gespann wird nicht verwendet", "trailer is not at the park position / target too - combination is not used"},
     msg30 = {"Courseplay ist nicht geladen / Fahrzeug kann kein Courseplay", "Courseplay is not loaded / vehicle cannot run Courseplay"},
     msg31 = {"Courseplay-Kurs nicht gefunden", "Courseplay course not found"},
     msg32 = {"Courseplay startet nicht - passendes Gerät angehängt?", "Courseplay does not start - fitting implement attached?"},
@@ -264,17 +267,27 @@ local TEXTS = {
     grpRunning = {"%d fahren", "%d driving"},
     grpProblems = {"%d mit Problem", "%d with a problem"},
     srcFixedShort = {"zugeordnet", "set by hand"},
+    srcMissing = {"zugeordnetes Lager nicht gefunden - bitte neu wählen", "storage set by hand not found - please choose again"},
     fSource = {"Lager an %s", "Storage at %s"},
     srcAuto = {"automatisch: %s", "automatic: %s"},
     srcAutoNone = {"automatisch (kein Lager im Umkreis gefunden)", "automatic (no storage found nearby)"},
     srcAutoEntry = {"automatisch (vollstes Lager im Umkreis von %d m)", "automatic (fullest storage within %d m)"},
-    srcHint = {"Gilt für alle Aufträge mit diesem Ladeziel. Nummern L1, L2 ... im Spiel anzeigen: Knopf 'L#' oben im HUD", "applies to all jobs with this load target. Show the numbers L1, L2 ... in the world: button 'L#' at the top of the HUD"},
+    srcHint = {"Gilt für alle Aufträge mit diesem Ladeziel. Rechtsklick: Zuordnung entfernen. Nummern im Spiel: Knopf 'L#'", "applies to all jobs with this load target. Right click: remove it. Numbers in the world: button 'L#'"},
     srcGrpNear = {"in der Nähe", "nearby"},
     srcGrpOther = {"weitere Lager", "other storages"},
     srcEntry = {"%s  -  %s %s  (%d m)", "%s  -  %s %s  (%d m)"},
     srcNoFt = {"lagert kein %s", "does not store %s"},
     tipStorageNums = {"Lager-Nummern im Spiel anzeigen / ausblenden (Zuordnung im Auftrag: 'Lager an ...')", "show / hide storage numbers in the world (assign in the job: 'Storage at ...')"},
     storageEmpty = {"leer", "empty"},
+    tabStorages = {"Lager (%d)", "Storages (%d)"},
+    storAdd = {"Ladeziel hinzufügen", "Add load target"},
+    storAddValue = {"AD-Ziel wählen ...", "choose AD target ..."},
+    storAddHint = {"Beliebiges AD-Ziel wählen und ihm ein Lager zuordnen - ohne Auftrag", "choose any AD target and set its storage - no job needed"},
+    storUsedBy = {"Ladeziel von: %s", "load target of: %s"},
+    storUnused = {"von keinem Auftrag genutzt - Zuordnung gilt, sobald ein Auftrag dieses Ladeziel nutzt", "not used by any job - the storage applies as soon as a job uses this load target"},
+    storGrpOther = {"Sonstige", "Other"},
+    storGrpFixed = {"%d/%d fest zugeordnet", "%d/%d set by hand"},
+    storRightHint = {"Rechtsklick: Zuordnung entfernen (wieder automatisch)", "right click: remove the storage (automatic again)"},
     tabJobs = {"Aufträge (%d)", "Jobs (%d)"},
     tabPlan = {"Geplant (%d)", "Planned (%d)"},
     planEmpty = {"Nichts geplant - gerade ist kein aktiver Auftrag fällig.", "Nothing planned - no active job is due right now."},
@@ -428,8 +441,152 @@ function ADJobs.getStorages(placeable)
             end
         end
     end
+    if #list == 0 then
+        -- buildings with their own kind of storage (DLC / mods, e.g. the stationary separator of the
+        -- Pumps & Hoses pack): search the specs for storages and fill level objects, 2 levels deep
+        local ok, err = pcall(ADJobs.findOtherStorages, placeable, add, list)
+        if not ok then
+            Logging.warning("[AD Jobs] Lager-Suche '%s': %s", tostring(placeable.getName ~= nil and placeable:getName() or "?"), tostring(err))
+        end
+    end
     storageCache[placeable] = {list = list, time = g_time}
     return list
+end
+
+--- fill level object of another kind (getFillLevel / setFillLevel, no fillLevels table) as a storage
+local function adaptFillObject(obj)
+    local fts = {}
+    local function addFt(ft)
+        if type(ft) == "number" and g_fillTypeManager:getFillTypeByIndex(ft) ~= nil then
+            fts[ft] = true
+        end
+    end
+    for _, field in ipairs({"fillTypes", "supportedFillTypes", "fillTypeIndices"}) do
+        local t = obj[field]
+        if type(t) == "table" then
+            for k, v in pairs(t) do
+                if v == true then
+                    addFt(k)
+                elseif type(v) == "number" then
+                    addFt(v)
+                end
+            end
+        end
+    end
+    addFt(obj.fillTypeIndex)
+    addFt(obj.fillType)
+    if type(obj.getFillType) == "function" then
+        local ok, ft = pcall(obj.getFillType, obj)
+        if ok then
+            addFt(ft)
+        end
+    end
+    -- an object that answers for any fill type (also a made up one) only has its own fill type
+    local okB, bogus = pcall(obj.getFillLevel, obj, 65000)
+    local ignoresFt = okB and type(bogus) == "number" and bogus > 0.5
+    if next(fts) == nil and not ignoresFt and g_fillTypeManager.getFillTypes ~= nil then
+        for _, fillType in pairs(g_fillTypeManager:getFillTypes()) do
+            if fillType.index ~= nil then
+                local ok, level = pcall(obj.getFillLevel, obj, fillType.index)
+                if ok and type(level) == "number" and level > 0.5 then
+                    addFt(fillType.index)
+                end
+            end
+        end
+    end
+    if next(fts) == nil then
+        return nil
+    end
+    local a = {fillLevels = {}, adjAdapter = true}
+    for ft, _ in pairs(fts) do
+        a.fillLevels[ft] = 0
+    end
+    a.getFillLevel = function(_, ft)
+        if not fts[ft] then
+            return 0
+        end
+        local ok, level = pcall(obj.getFillLevel, obj, ft)
+        return (ok and type(level) == "number") and level or 0
+    end
+    a.getCapacity = function(_, ft)
+        if type(obj.getCapacity) == "function" then
+            local ok, cap = pcall(obj.getCapacity, obj, ft)
+            if ok and type(cap) == "number" then
+                return cap
+            end
+        end
+        if type(obj.capacities) == "table" and type(obj.capacities[ft]) == "number" then
+            return obj.capacities[ft]
+        end
+        return tonumber(obj.capacity) or 0
+    end
+    return a
+end
+
+local SKIP_KEYS = {owningPlaceable = true, owner = true, placeable = true, target = true, vehicle = true, rootNode = true,
+    parent = true, mission = true, customEnvironment = true, i3dMappings = true}
+local diagLogged = {}
+
+function ADJobs.findOtherStorages(placeable, add, list)
+    local visited, found = {}, {}
+    local function scan(value, depth, path)
+        if type(value) ~= "table" or visited[value] or depth > 2 then
+            return
+        end
+        visited[value] = true
+        if type(value.fillLevels) == "table" then
+            add(value)
+            table.insert(found, path)
+            return
+        end
+        if type(value.getFillLevel) == "function" and type(value.setFillLevel) == "function" then
+            local a = adaptFillObject(value)
+            if a ~= nil then
+                add(a)
+                table.insert(found, path)
+            end
+            return
+        end
+        if value.isa ~= nil and Vehicle ~= nil then
+            local ok, isVehicle = pcall(value.isa, value, Vehicle)
+            if ok and isVehicle then
+                return
+            end
+        end
+        for k, v in pairs(value) do
+            if type(v) == "table" and not SKIP_KEYS[k] then
+                scan(v, depth + 1, path .. "." .. tostring(k))
+            end
+        end
+    end
+    for key, spec in pairs(placeable) do
+        if type(key) == "string" and key:sub(1, 5) == "spec_" and type(spec) == "table" and key ~= "spec_husbandryFood" then
+            scan(spec, 0, key)
+        end
+    end
+    -- say once what was found (or, for a separator, what the building looks like), to fix the next case
+    local name = tostring(placeable.getName ~= nil and placeable:getName() or "?")
+    if not diagLogged[placeable] then
+        if #found > 0 then
+            diagLogged[placeable] = true
+            Logging.info("[AD Jobs] Lager erkannt (allgemeine Suche): '%s' -> %s", name, table.concat(found, ", "))
+        elseif name:lower():find("separ") ~= nil then
+            diagLogged[placeable] = true
+            local keys = {}
+            for key, spec in pairs(placeable) do
+                if type(key) == "string" and key:sub(1, 5) == "spec_" and type(spec) == "table" then
+                    local sub = {}
+                    for k, v in pairs(spec) do
+                        table.insert(sub, tostring(k) .. ":" .. type(v))
+                    end
+                    table.sort(sub)
+                    table.insert(keys, key .. " {" .. table.concat(sub, " ") .. "}")
+                end
+            end
+            table.sort(keys)
+            Logging.info("[AD Jobs] Diagnose '%s': kein Lager erkannt - %s", name, table.concat(keys, " | "))
+        end
+    end
 end
 
 local storageFtCache = setmetatable({}, {__mode = "k"})
@@ -1227,11 +1384,21 @@ function ADJobs.findVehicle(job)
         local idx = ADJobs.getMarkerIndexByName(job.parkMarker)
         local list = ADJobs.getVehiclesAtPark(idx, job.farmId)
         local chosen = nil
-        -- 1. at the park position, idle, right implement 2. at the park position and idle 3. nearest
+        -- 1. complete with trailer at the park position, idle, right implement 2. complete at the park position
+        -- and idle 3. tractor at the park position and idle 4. right implement 5. nearest
         for _, e in ipairs(list) do
-            if e.dist <= ADJobs.PARK_DISTANCE and not e.vehicle.ad.stateModule:isActive() and ADJobs.checkImplement(job, e.vehicle) == 0 then
+            if e.dist <= ADJobs.PARK_DISTANCE and not e.vehicle.ad.stateModule:isActive() and ADJobs.checkImplement(job, e.vehicle) == 0
+                and ADJobs.isCombinationNearMarker(e.vehicle, idx) then
                 chosen = e.vehicle
                 break
+            end
+        end
+        if chosen == nil then
+            for _, e in ipairs(list) do
+                if e.dist <= ADJobs.PARK_DISTANCE and not e.vehicle.ad.stateModule:isActive() and ADJobs.isCombinationNearMarker(e.vehicle, idx) then
+                    chosen = e.vehicle
+                    break
+                end
             end
         end
         if chosen == nil then
@@ -1671,22 +1838,45 @@ function ADJobs.vehicleServesJob(vehicle, job)
     return (job.vehicleUid or "") ~= "" and vehicle.getUniqueId ~= nil and vehicle:getUniqueId() == job.vehicleUid
 end
 
---- most urgent open "pick up and deliver" job this vehicle can drive next
-function ADJobs.findChainJob(current, vehicle)
+--- most urgent open "pick up and deliver" job this vehicle can drive next (without parking in between).
+--- reasons (optional table) gets "'name' (why)" for every due job of the vehicle that is not taken.
+function ADJobs.findChainJob(current, vehicle, reasons)
     local best, bestUrgency = nil, math.huge
+    local function skip(job, why)
+        if reasons ~= nil then
+            table.insert(reasons, string.format("'%s' (%s)", tostring(job.name), why))
+        end
+    end
     for _, job in ipairs(ADJobs.jobs) do
         if job ~= current and job.active and not job.running and job.swap == nil and job.driveMode ~= "load"
-            and (job.pauseUntil == nil or g_time >= job.pauseUntil)
-            and ADJobs.vehicleServesJob(vehicle, job)
-            and ADJobs.getMarkerIndexByName(job.loadMarker) ~= nil and ADJobs.getMarkerIndexByName(job.unloadMarker) ~= nil then
+            and job.driveMode ~= "sequence" and ADJobs.vehicleServesJob(vehicle, job) then
             local p = freshPercent(job)
-            local free = ADJobs.getFreeSpace(job)
-            local enoughSpace = free == nil or free >= ADJobs.getMinLoad(job, vehicle)
-            -- checkImplement: a job bound to another trailer is never chained (the vehicle would have to swap first)
-            -- order of the plan: by hand sorted first, then priority (1 before 9), then the most urgent level
-            local u = ADJobs.planKey(job, p)
-            if ADJobs.needsRun(job, p) and u < bestUrgency and enoughSpace and ADJobs.priceOk(job) and ADJobs.checkImplement(job, vehicle) == 0 then
-                best, bestUrgency = job, u
+            if ADJobs.needsRun(job, p) then
+                local free = ADJobs.getFreeSpace(job)
+                local implCode = ADJobs.checkImplement(job, vehicle)
+                -- order of the plan: by hand sorted first, then priority (1 before 9), then the most urgent level
+                local u = ADJobs.planKey(job, p)
+                if job.pauseUntil ~= nil and g_time < job.pauseUntil then
+                    skip(job, string.format("Pause noch %d min", math.ceil((job.pauseUntil - g_time) / 60000)))
+                elseif ADJobs.getMarkerIndexByName(job.loadMarker) == nil or ADJobs.getMarkerIndexByName(job.unloadMarker) == nil then
+                    skip(job, "Lade-/Abladeziel fehlt")
+                elseif free ~= nil and free < ADJobs.getMinLoad(job, vehicle) then
+                    skip(job, "kein Platz am Abladeziel")
+                elseif not ADJobs.priceOk(job) then
+                    skip(job, "Preis zu niedrig")
+                elseif implCode ~= 0 then
+                    -- e.g. bound to another trailer: the vehicle would have to swap first
+                    skip(job, implCode == 20 and "anderer Anhänger nötig" or "Anhänger passt nicht")
+                elseif job.direction ~= "empty" and ADJobs.allSourcesEmpty(job, vehicle) then
+                    skip(job, "Lager am Ladeziel leer")
+                elseif u < bestUrgency then
+                    if best ~= nil then
+                        skip(best, "später")
+                    end
+                    best, bestUrgency = job, u
+                else
+                    skip(job, "später")
+                end
             end
         end
     end
@@ -1905,7 +2095,7 @@ function ADJobs.getTargetFreeSpace(job)
                         local f = math.max(0, cap - level)
                         if free == nil or f > free then
                             free = f
-                            name = ADJobs.getPlaceableLabel(p) or (p.getName ~= nil and p:getName()) or "?"
+                            name = ADJobs.getStorageTitleOf(p)
                         end
                     end
                 end
@@ -2298,7 +2488,10 @@ end
 -- several silos side by side (hay / straw) may need the right one set by hand.
 -------------------------------------------------------------------------------------------------
 
-ADJobs.markerSources = {}   -- [AD target name] = unique id of the placeable whose storage counts there
+-- [AD target name] = "@x,z": position of the building whose storage counts there. The position is the same
+-- on the server and on every client; the unique ids of placeables are not (on a dedicated server the
+-- client has ids of its own). Older versions saved the unique id: still read where it fits (single player).
+ADJobs.markerSources = {}
 
 local storageListCache = {time = -math.huge, list = {}, byUid = {}}
 
@@ -2308,13 +2501,15 @@ function ADJobs.getStoragePlaceables()
     if g_time - storageListCache.time < 5000 then
         return storageListCache.list, storageListCache.byUid
     end
-    local list, byUid = {}, {}
+    local list, byUid, byP = {}, {}, {}
     if g_currentMission ~= nil and g_currentMission.placeableSystem ~= nil then
         for _, p in ipairs(g_currentMission.placeableSystem.placeables) do
             if not p.isDeleted and p.rootNode ~= nil and p.rootNode ~= 0 and #ADJobs.getStorages(p) > 0 then
                 local x, _, z = getWorldTranslation(p.rootNode)
-                table.insert(list, {p = p, x = math.floor(x + 0.5), z = math.floor(z + 0.5),
-                    uid = p.getUniqueId ~= nil and tostring(p:getUniqueId()) or ""})
+                local e = {p = p, x = math.floor(x + 0.5), z = math.floor(z + 0.5),
+                    uid = p.getUniqueId ~= nil and tostring(p:getUniqueId()) or ""}
+                e.key = string.format("@%d,%d", e.x, e.z)
+                table.insert(list, e)
             end
         end
     end
@@ -2326,28 +2521,53 @@ function ADJobs.getStoragePlaceables()
     end)
     for i, e in ipairs(list) do
         e.num = i
+        byP[e.p] = e
         if e.uid ~= "" then
             byUid[e.uid] = e
         end
     end
-    storageListCache = {time = g_time, list = list, byUid = byUid}
+    storageListCache = {time = g_time, list = list, byUid = byUid, byP = byP}
     return list, byUid
 end
 
-function ADJobs.getStorageByUid(uid)
-    if uid == nil or uid == "" then
+--- storage entry of a key "@x,z" (the building at that position, 3 m tolerance) or of an old unique id
+function ADJobs.getStorageByUid(key)
+    if key == nil or key == "" then
         return nil
     end
-    local _, byUid = ADJobs.getStoragePlaceables()
-    return byUid[uid]
+    local list, byUid = ADJobs.getStoragePlaceables()
+    local x, z = tostring(key):match("^@(%-?%d+),(%-?%d+)$")
+    if x ~= nil then
+        x, z = tonumber(x), tonumber(z)
+        local best, bestD = nil, 3.01
+        for _, e in ipairs(list) do
+            local d = math.abs(e.x - x) + math.abs(e.z - z)
+            if d < bestD then
+                best, bestD = e, d
+            end
+        end
+        return best
+    end
+    return byUid[key]
 end
 
---- "L3 Heulager #2"
+--- "L3 Heulager" (the storage number replaces the "#2" of buildings with the same name)
 function ADJobs.getStorageTitle(e)
     if e == nil then
         return "?"
     end
-    return string.format("L%d %s", e.num, tostring(ADJobs.getPlaceableLabel(e.p) or "?"))
+    local name = e.p.getName ~= nil and e.p:getName() or nil
+    return string.format("L%d %s", e.num, tostring(name or ADJobs.getPlaceableLabel(e.p) or "?"))
+end
+
+--- storage title of a placeable ("L3 Heulager"); its building label if it has no storage
+function ADJobs.getStorageTitleOf(p)
+    ADJobs.getStoragePlaceables()
+    local e = storageListCache.byP ~= nil and storageListCache.byP[p] or nil
+    if e ~= nil then
+        return ADJobs.getStorageTitle(e)
+    end
+    return ADJobs.getPlaceableLabel(p) or (p.getName ~= nil and p:getName()) or "?"
 end
 
 --- liters of fill type ft in the storages of placeable p (nil = it does not store ft)
@@ -2366,7 +2586,8 @@ end
 function ADJobs.getStorageContents(p)
     local sums = {}
     for _, storage in ipairs(ADJobs.getStorages(p)) do
-        for ft, level in pairs(storage.fillLevels) do
+        for ft, _ in pairs(storageFillTypes(storage)) do
+            local level = storageLevel(storage, ft)
             if type(level) == "number" and level > 0.5 then
                 sums[ft] = (sums[ft] or 0) + level
             end
@@ -2441,6 +2662,11 @@ function ADJobs.getSourceLevel(markerName, ft)
     end
     -- storage set by hand for this target: only that one counts (nil = it does not store this fill type)
     local fixed = ADJobs.getStorageByUid(fixedUid)
+    if fixed ~= nil and fixed.key ~= fixedUid and g_server ~= nil then
+        -- old savegame entry (unique id): store the position from now on
+        ADJobs.markerSources[markerName] = fixed.key
+        ADJobs.lastSyncKey = nil
+    end
     if fixed ~= nil then
         local level = ADJobs.measurePlaceableFt(fixed.p, ft)
         local text = string.format("%s %s (%s)", ADJobs.getStorageTitle(fixed), level ~= nil and string.format("%d l", math.floor(level)) or "-", txt("srcFixedShort"))
@@ -2466,7 +2692,7 @@ function ADJobs.getSourceLevel(markerName, ft)
                     end
                     if found then
                         level = math.max(level or 0, sum)
-                        local label = ADJobs.getPlaceableLabel ~= nil and ADJobs.getPlaceableLabel(p) or (p.getName ~= nil and p:getName()) or "?"
+                        local label = ADJobs.getStorageTitleOf(p)
                         table.insert(names, string.format("%s %d l (%d m)", tostring(label), math.floor(sum), math.floor(d)))
                     end
                 end
@@ -2747,15 +2973,22 @@ function ADJobs.beforeNextTask(mode)
         Logging.info("[AD Jobs] Auftrag %d '%s': Rest bei '%s' abgeladen", job.id, tostring(job.name), tostring(job._dumping.marker))
         job._dumping = nil
     end
-    local nextJob = ADJobs.findChainJob(job, vehicle)
+    local reasons = {}
+    local nextJob = ADJobs.findChainJob(job, vehicle, reasons)
     local rest = ADJobs.getRest(vehicle)
     if nextJob ~= nil and #rest > 0 then
         -- rest in the trailer (storage was full): only on to a job with the same load
         local ft = (nextJob.loadFillTypeName or "") ~= "" and nextJob.loadFillTypeName or nil
         local restLevel = ft ~= nil and ADJobs.measureCombination(vehicle, ft) or nil
         if restLevel == nil or restLevel <= 0.5 then
+            table.insert(reasons, string.format("'%s' (erst Rest im Anhänger abladen)", tostring(nextJob.name)))
             nextJob = nil
         end
+    end
+    if nextJob == nil and #reasons > 0 then
+        -- jobs are due for this vehicle, but none can be taken right now: say why (instead of a silent park)
+        Logging.info("[AD Jobs] Auftrag %d '%s': kein Folgeauftrag für %s - %s", job.id, tostring(job.name),
+            ADJobs.getVehicleName(vehicle), table.concat(reasons, ", "))
     end
     if nextJob ~= nil then
         ADJobs.chainTo(job, nextJob, vehicle)
@@ -3157,6 +3390,10 @@ function ADJobs.checkReady(job, vehicle)
     local sm = vehicle.ad.stateModule
     if sm:isActive() or (vehicle.getIsControlled ~= nil and vehicle:getIsControlled())
         or (vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) then
+        -- the vehicle is busy, but the job could not run anyway: say why (more useful in the plan)
+        if job.driveMode ~= "sequence" and job.direction ~= "empty" and ADJobs.allSourcesEmpty(job, vehicle) then
+            return 27, false
+        end
         return 7, false
     end
     if ADJobs.hasRotateTargets(vehicle) and not hasOwnRotateSetting(vehicle) then
@@ -3175,13 +3412,14 @@ function ADJobs.checkReady(job, vehicle)
         if ADJobs.allSourcesEmpty(job, vehicle) then
             return 27, false
         end
-        -- feeder: only from its park position or its waiting place (not while working on a field)
-        local atPark = parkIdx ~= nil and ADJobs.isNearMarker(vehicle, parkIdx)
+        -- feeder: only from its park position or its waiting place (not while working on a field),
+        -- and only with the trailer standing there as well
+        local atPark, tractorAtPark = ADJobs.isCombinationNearMarker(vehicle, parkIdx)
         local waitName = (job.unloadMarker or "") ~= "" and job.unloadMarker or job.returnMarker
         local waitIdx = ADJobs.getMarkerIndexByName(waitName)
-        local atWait = waitIdx ~= nil and ADJobs.isNearMarker(vehicle, waitIdx)
+        local atWait, tractorAtWait = ADJobs.isCombinationNearMarker(vehicle, waitIdx)
         if not atPark and not atWait then
-            return 16, false
+            return (tractorAtPark or tractorAtWait) and 40 or 16, false
         end
         -- nothing may be pumped / overloaded right now
         if g_time - (job.stableSince or g_time) < ADJobs.STABLE_TIME then
@@ -3198,8 +3436,8 @@ function ADJobs.checkReady(job, vehicle)
     if not wp then
         return 5, true
     end
-    local x, _, z = getWorldTranslation(vehicle.rootNode)
-    local atPark = MathUtil.vector2Length(x - wp.x, z - wp.z) <= ADJobs.PARK_DISTANCE
+    -- the whole combination (vehicle and trailer) must stand there, not only the tractor
+    local atPark, tractorNear = ADJobs.isCombinationNearMarker(vehicle, parkIdx)
     if not atPark and implCode == 0 then
         -- the combination stands at the load or unload target of the job (left there by hand or by another
         -- job): it is watched and started from there as well; AutoDrive delivers first if it is loaded
@@ -3207,19 +3445,25 @@ function ADJobs.checkReady(job, vehicle)
         table.insert(names, job.unloadMarker)
         for _, name in ipairs(names) do
             local idx = (name or "") ~= "" and ADJobs.getMarkerIndexByName(name) or nil
-            if idx ~= nil and ADJobs.isNearMarker(vehicle, idx) then
-                atPark = true
-                break
+            if idx ~= nil then
+                local ok, near = ADJobs.isCombinationNearMarker(vehicle, idx)
+                tractorNear = tractorNear or near
+                if ok then
+                    atPark = true
+                    break
+                end
             end
         end
     end
     if not atPark and ADJobs.usesSwap(job) and implCode == 0 then
         -- just swapped: the vehicle stands at the stand of the job trailer and starts from there
         local standIdx = ADJobs.getMarkerIndexByName(ADJobs.getSwapMarker(job))
-        atPark = standIdx ~= nil and ADJobs.isNearMarker(vehicle, standIdx)
+        local near
+        atPark, near = ADJobs.isCombinationNearMarker(vehicle, standIdx)
+        tractorNear = tractorNear or near
     end
     if not atPark then
-        return 6, false
+        return tractorNear and 40 or 6, false
     end
     -- the right implement must be attached (checked after the park position: code 20 "job trailer
     -- not attached" then means "idle at the park position with the wrong trailer" -> swap trailers)
@@ -3253,6 +3497,34 @@ function ADJobs.isNearMarker(vehicle, markerIdx)
     end
     local x, _, z = getWorldTranslation(vehicle.rootNode)
     return MathUtil.vector2Length(x - wp.x, z - wp.z) <= ADJobs.PARK_DISTANCE
+end
+
+--- does the whole combination stand at the marker - the vehicle and every trailer / implement attached
+--- to it? (a tractor next to its park position whose trailer stands somewhere else is not "parked")
+--- returns ok, tractorNear (tractorNear: the vehicle itself is there, only something attached is not)
+function ADJobs.isCombinationNearMarker(vehicle, markerIdx)
+    if markerIdx == nil then
+        return false, false
+    end
+    local marker = ADJobs.GM:getMapMarkerById(markerIdx)
+    local wp = marker ~= nil and ADJobs.GM:getWayPointById(marker.id)
+    if not wp then
+        return false, false
+    end
+    local root = vehicle.getRootVehicle ~= nil and vehicle:getRootVehicle() or vehicle
+    local x, _, z = getWorldTranslation(root.rootNode)
+    if MathUtil.vector2Length(x - wp.x, z - wp.z) > ADJobs.PARK_DISTANCE then
+        return false, false
+    end
+    for _, v in ipairs(ADJobs.getVehicleUnits(root)) do
+        if v ~= root and v.rootNode ~= nil and not v.isDeleted then
+            local tx, _, tz = getWorldTranslation(v.rootNode)
+            if MathUtil.vector2Length(tx - wp.x, tz - wp.z) > ADJobs.TRAILER_PARK_DISTANCE then
+                return false, true
+            end
+        end
+    end
+    return true, true
 end
 
 --- is the right implement attached? 0 = ok, otherwise message code
@@ -3665,6 +3937,16 @@ function ADJobs.updateJob(job)
         end
         job.state, job.msgCode = ADJobs.ST_NOTREADY, 28
         return
+    end
+    if msgCode == 40 and vehicle ~= nil then
+        -- due, but the trailer does not stand with the vehicle at the park position / target: say so once
+        if job._notAtParkLogged ~= vehicle then
+            job._notAtParkLogged = vehicle
+            Logging.info("[AD Jobs] Auftrag %d '%s': %s steht am Parkplatz/Ziel, der Anhänger aber nicht - Gespann wird nicht verwendet",
+                job.id, tostring(job.name), ADJobs.getVehicleName(vehicle))
+        end
+    else
+        job._notAtParkLogged = nil
     end
     if msgCode ~= 0 then
         job.state = isError and ADJobs.ST_ERROR or ADJobs.ST_NOTREADY

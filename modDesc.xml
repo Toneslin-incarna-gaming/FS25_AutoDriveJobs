@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <modDesc descVersion="113">
     <author>Toneslin</author>
-    <version>1.6.2.0</version>
+    <version>1.6.2.1</version>
     <title>
         <en>AutoDrive Jobs</en>
         <de>AutoDrive Aufträge</de>
     </title>
     <description>
         <en><![CDATA[Add-on for AutoDrive: rule based supply jobs.
-If the fill level of a building (animal food, food group, straw, water, silo, production storage, ...) falls below X %, the vehicle that has the chosen AutoDrive park position assigned is started when it stands there. It drives "pick up and deliver" between a load target and an unload target until Y % is reached or N trips are done, then it parks again.
+If the fill level of a building (animal food, food group, straw, water, silo, production storage, ...) falls below X %, the vehicle that has the chosen AutoDrive park position assigned is started when it stands there together with its trailer (or at the load / unload target of the job). It drives "pick up and deliver" between a load target and an unload target until Y % is reached or N trips are done, then it parks again.
 Rule direction "Haul away" (version 1.6): the job starts when the level reaches Y % and sells / hauls between load target and unload target until it drops below X % (e.g. milk to the dairy).
 A job can be bound to one trailer: if another trailer hangs on the vehicle, it drops that one at the park position, reverses to the job trailer at its own AD park position and attaches it, runs the job, parks at that position afterwards and swaps back. The vehicle stops by itself right before the couplings touch.
 Tab "Planned" (version 1.6.2): per vehicle the job it drives right now and the jobs that are due, in the order they get the vehicle - drag them into another order (right click: next, "Auto": automatic order again).
-Button "L#" (version 1.6.2): shows the numbers L1, L2 ... of all storages in the world; in the job editor each load target can be set to one storage ("Storage at ..."), e.g. when hay and straw silos stand side by side.
+Button "L#" (version 1.6.2): shows the numbers L1, L2 ... of all storages in the world; each load target can be set to one storage (tab "Storages" or "Storage at ..." in the job), e.g. when hay and straw silos stand side by side.
 Mode "Sequence (Courseplay)": several steps - drive to an AD target, run a saved Courseplay course - then park and switch off (requires FS25_Courseplay).
 Vehicles can be watched too (e.g. a feeder slurry tanker): if its level falls below X % and nothing is being transferred for 15 s, it drives to the load target, loads and returns to a chosen AD target (or automatically to the AD target nearest to where it stood).
 LCtrl + LAlt + P sends the nearest job vehicle around you (e.g. the feeder waiting next to the field, not the vehicle you sit in) to its park position and ends its job (also possible per job in the HUD). Open the job HUD (AutoDrive style, movable by its header) with LCtrl + LAlt + J. Requires FS25_AutoDrive. Must be installed on the server and on all players.]]></en>
         <de><![CDATA[Zusatz für AutoDrive: Versorgungs-Aufträge nach Regeln.
-Fällt der Füllstand eines Gebäudes (Futter, Futtergruppe, Stroh, Wasser, Silo, Produktionslager, ...) unter X %, wird das Fahrzeug gestartet, dem der gewählte AutoDrive-Parkplatz zugewiesen ist und das dort steht. Es fährt "Abholen und Liefern" zwischen Ladeziel und Abladeziel, bis Y % erreicht oder N Fahrten erledigt sind, und parkt danach wieder.
+Fällt der Füllstand eines Gebäudes (Futter, Futtergruppe, Stroh, Wasser, Silo, Produktionslager, ...) unter X %, wird das Fahrzeug gestartet, dem der gewählte AutoDrive-Parkplatz zugewiesen ist und das dort samt Anhänger steht (oder am Lade-/Abladeziel des Auftrags). Es fährt "Abholen und Liefern" zwischen Ladeziel und Abladeziel, bis Y % erreicht oder N Fahrten erledigt sind, und parkt danach wieder.
 Regel "Abfuhr" (Version 1.6): der Auftrag startet, wenn der Stand Y % erreicht, und fährt zwischen Ladeziel und Abladeziel, bis er unter X % fällt (z. B. Milch zur Molkerei).
 Ein Auftrag kann an einen Anhänger gebunden werden: hängt ein anderer am Fahrzeug, stellt es diesen am Parkplatz ab, fährt rückwärts an den Auftrags-Anhänger auf dessen AD-Parkplatz und koppelt an, fährt den Auftrag, parkt danach dort und koppelt wieder zurück. Das Fahrzeug hält von selbst kurz vor dem Anstoßen der Kupplungen.
 Reiter "Geplant" (Version 1.6.2): je Fahrzeug der Auftrag, den es gerade fährt, und die fälligen Aufträge in der Reihenfolge, in der sie das Fahrzeug bekommen - per Drag & Drop umsortieren (Rechtsklick: als Nächstes, "Auto": wieder automatisch).
-Knopf "L#" (Version 1.6.2): zeigt die Nummern L1, L2 ... aller Lager im Spiel; im Auftrag lässt sich jedem Ladeziel ein Lager fest zuordnen ("Lager an ..."), z. B. wenn Heu- und Strohsilos nebeneinander stehen.
+Knopf "L#" (Version 1.6.2): zeigt die Nummern L1, L2 ... aller Lager im Spiel; jedem Ladeziel lässt sich ein Lager fest zuordnen (Reiter "Lager" oder "Lager an ..." im Auftrag), z. B. wenn Heu- und Strohsilos nebeneinander stehen.
 Fahrweise "Ablauf (Courseplay)": mehrere Schritte - zu einem AD-Ziel fahren, gespeicherten Courseplay-Kurs abfahren - danach parken und ausschalten (benötigt FS25_Courseplay).
 Auch Fahrzeuge können überwacht werden (z. B. ein Zubringer-Güllefass): fällt dessen Stand unter X % und wird seit 15 s nichts mehr umgeladen, fährt es zum Ladeziel, lädt und fährt zu einem gewählten AD-Ziel zurück (oder automatisch zum AD-Ziel, das seiner Standposition am nächsten liegt).
 LStrg + LAlt + P schickt das nächste Auftragsfahrzeug in der Umgebung (z. B. den Zubringer, der neben dem Feld wartet - nicht das eigene Fahrzeug) zum Parkplatz und beendet seinen Auftrag (geht auch je Auftrag im HUD). Auftrags-HUD (im AutoDrive-Stil, an der Kopfzeile verschiebbar) öffnen mit LStrg + LAlt + J. Benötigt FS25_AutoDrive. Muss auf dem Server und bei allen Spielern installiert sein.]]></de>

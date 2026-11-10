@@ -1,5 +1,30 @@
 # Changelog – AutoDrive Aufträge / AutoDrive Jobs
 
+## 1.6.2.1
+
+**Neu / New**
+- Reiter „Lager“: jedem AD-Ladeziel ein Lager fest zuordnen, ohne einen Auftrag zu öffnen; gruppiert nach Ladegut, Rechtsklick = Zuordnung entfernen, „Ladeziel hinzufügen“ für AD-Ziele ohne Auftrag
+  *"Storages" tab: set the storage of an AD load target without opening a job; grouped by fill type, right click = remove, "Add load target" for AD targets without a job*
+- Gebäude mit eigener Lagerart (DLC / Mods, z. B. stationärer Separator aus Pumps & Hoses) werden als Lager erkannt
+  *buildings with their own kind of storage (DLC / mods, e.g. the stationary separator of Pumps & Hoses) are detected as storages*
+
+**Geändert / Changed**
+- Ein Gespann wird nur noch verwendet, wenn Fahrzeug **und Anhänger** am Parkplatz oder am Lade-/Abladeziel stehen; neue Meldung „Anhänger steht nicht mit am Parkplatz / Ziel“
+  *a combination is only used if the vehicle **and its trailer** stand at the park position or at the load / unload target; new message "trailer is not at the park position / target too"*
+- Umkoppeln nur, wenn der Auftrags-Anhänger auf seinem AD-Parkplatz steht und an keiner anderen Zugmaschine hängt
+  *trailer swap only if the job trailer stands at its AD park position and hangs on no other vehicle*
+- Zurückkoppeln nur, wenn der andere Anhänger noch am Parkplatz steht; sonst wird der Auftrags-Anhänger abgestellt und das Fahrzeug parkt allein (ebenso bei einem Fahrzeug, das vorher keinen Anhänger hatte)
+  *swap back only if the other trailer still stands at the park position; otherwise the job trailer is dropped and the vehicle parks alone (same for a vehicle that had no trailer before)*
+- Ankoppeln fehlgeschlagen oder Auftrags-Anhänger inzwischen weg: das Fahrzeug nimmt seinen eigenen Anhänger wieder, neuer Versuch erst nach 10 min
+  *attach failed or job trailer taken meanwhile: the vehicle takes its own trailer again, next try after 10 min*
+- Lager-Zuordnungen werden über die Position des Gebäudes gespeichert – funktioniert jetzt auch auf Dedicated Servern; alte Zuordnungen werden übernommen
+  *storage assignments are saved by the position of the building – now also works on dedicated servers; old assignments are taken over*
+- Lagernamen überall als „L3 Heulager“ / *storage names shown as "L3 Hay storage" everywhere*
+- Log nennt den Grund, wenn ein Fahrzeug keinen Folgeauftrag übernimmt / *log says why a vehicle does not take a follow-up job*
+
+**Hinweis / Note**
+- Netzwerkversion bleibt 6, im Multiplayer trotzdem überall 1.6.2.1 verwenden / *network version stays 6, still use 1.6.2.1 everywhere in multiplayer*
+
 ## 1.6.2.0
 
 **Neu / New**

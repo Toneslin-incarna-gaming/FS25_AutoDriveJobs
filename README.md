@@ -40,6 +40,7 @@ Kein Timer, keine festen Routenschleifen – der Auftrag startet, wenn er gebrau
 
 **Auftrags-Anhänger (Umkoppeln)**
 Ein Auftrag kann an einen bestimmten Anhänger gebunden werden, z. B. den Milchauflieger. Hängt beim Start ein anderer Anhänger am Fahrzeug, stellt es diesen am Parkplatz ab, fährt rückwärts an den Auftrags-Anhänger auf dessen AD-Parkplatz, hält kurz vor der Deichsel und koppelt an. Nach dem Auftrag parkt es dort, stellt ihn ab und holt den anderen wieder.
+Umgekoppelt wird nur, wenn der Auftrags-Anhänger auf seinem AD-Parkplatz steht und an keiner anderen Zugmaschine hängt. Ist der andere Anhänger nach dem Auftrag weg oder angehängt, stellt das Fahrzeug den Auftrags-Anhänger ab und parkt allein.
 
 **Clever beim Laden und Abladen**
 - Lädt nur so viel, wie ins Lager noch passt (mit Sicherheitspuffer) – niemand muss von Hand nachhelfen.
@@ -47,7 +48,7 @@ Ein Auftrag kann an einen bestimmten Anhänger gebunden werden, z. B. den Milcha
 - **Auftrags-Ketten**: hat das Fahrzeug nach dem Abladen noch einen weiteren offenen Auftrag mit demselben Parkplatz, fährt es direkt weiter, statt erst zu parken.
 - Manuell gestartete AD-Fahrten mit denselben Zielen werden vom passenden Auftrag „übernommen“.
 - **Mehrere Ladeziele**: Ist das Lager am ersten Ladeziel leer, fährt das Fahrzeug zum nächsten weiter. Sind alle leer, startet der Auftrag gar nicht erst.
-- **Lager am Ladeziel**: Automatisch zählt das vollste passende Lager im Umkreis von 80 m. Stehen mehrere Silos nebeneinander (z. B. Heu und Stroh), ordnest du im Auftrag unter „Lager an …“ das richtige fest zu. Der Knopf **L#** oben im HUD zeigt dazu über jedem Lager im Spiel eine Nummer (L1, L2 …) mit Inhalt an.
+- **Lager am Ladeziel**: Automatisch zählt das vollste passende Lager im Umkreis von 80 m. Stehen mehrere Silos nebeneinander (z. B. Heu und Stroh), ordnest du im Auftrag unter „Lager an …“ oder im Reiter **„Lager“** (alle Ladeziele auf einen Blick, auch ohne Auftrag) das richtige fest zu; Rechtsklick entfernt die Zuordnung. Der Knopf **L#** oben im HUD zeigt dazu über jedem Lager im Spiel eine Nummer (L1, L2 …) mit Inhalt an.
 - Ist noch **anderes Ladegut** im Anhänger (Rest eines anderen Auftrags), wird es zuerst bei einem passenden Auftrag abgeliefert.
 - Nimmt das Abladeziel nichts mehr an, wird nach 30 s abgebrochen und der Rest anderswo abgeladen, statt endlos zu warten.
 
@@ -56,7 +57,7 @@ Ein Auftrag kann an einen bestimmten Anhänger gebunden werden, z. B. den Milcha
 - **Reiter „Geplant“**: zeigt je Fahrzeug, was es gerade fährt und welche fälligen Aufträge in welcher Reihenfolge folgen. Per **Drag & Drop** umsortieren, **Rechtsklick** = als Nächstes, **„Auto“** = wieder automatisch.
 
 **Fahrzeugwahl über den AD-Parkplatz**
-Ein Auftrag kennt kein festes Fahrzeug, sondern einen AutoDrive-Parkplatz. Gestartet wird das Fahrzeug, dem dieser Parkplatz zugewiesen ist und das dort steht. Traktor tauschen = einfach anderen Traktor mit passendem Anhänger hinstellen.
+Ein Auftrag kennt kein festes Fahrzeug, sondern einen AutoDrive-Parkplatz. Gestartet wird das Fahrzeug, dem dieser Parkplatz zugewiesen ist und das dort **samt Anhänger** steht (oder am Lade-/Abladeziel des Auftrags). Steht nur die Zugmaschine dort und der Anhänger woanders, wird das Gespann nicht verwendet. Traktor tauschen = einfach anderen Traktor mit passendem Anhänger hinstellen.
 
 **HUD im AutoDrive-Stil**
 - Öffnen/Schließen: **LStrg + LAlt + J** (im Spiel umbelegbar)
@@ -83,7 +84,7 @@ Aufträge und Lager-Zuordnungen liegen im Savegame-Ordner als `autoDriveJobs.xml
 1. In AutoDrive: Ziele für Laden, Abladen und einen Parkplatz anlegen; dem Fahrzeug im AD-HUD den Parkplatz zuweisen und es dort abstellen.
 2. **LStrg + LAlt + J** → **+** (Neuer Auftrag).
 3. Objekt wählen (Stall, Silo, … oder Anhänger) → Messwert wählen → Parkplatz → Ladegut → Ladeziel → Abladeziel → Start-% / Stopp-% / Fahrten → **Speichern**.
-4. Fertig. Der Auftrag zeigt in der Liste, was er gerade tut („bereit, Stand ok“, „fährt“, „Pause noch 8 min“, …) oder woran es hängt („Fahrzeug steht nicht am Parkplatz“).
+4. Fertig. Der Auftrag zeigt in der Liste, was er gerade tut („bereit, Stand ok“, „fährt“, „Pause noch 8 min“, …) oder woran es hängt („Fahrzeug mit Anhänger steht weder am Parkplatz noch am Lade-/Abladeziel“).
 
 ### Hinweise
 
@@ -138,6 +139,7 @@ No timers, no fixed loops – a job starts when it is needed and stops when the 
 
 **Job trailer (trailer swap)**
 A job can be bound to one trailer, e.g. the milk trailer. If another trailer hangs on the vehicle when the job starts, it drops that one at the park position, reverses to the job trailer at its AD park position, stops right before the drawbar and attaches it. After the job it parks there, drops it and fetches the other one again.
+The swap only happens if the job trailer stands at its AD park position and hangs on no other vehicle. If the other trailer is gone or attached elsewhere after the job, the vehicle drops the job trailer and parks alone.
 
 **Smart loading and unloading**
 - Loads only what still fits into the storage (with a safety margin) – nobody has to help by hand.
@@ -145,7 +147,7 @@ A job can be bound to one trailer, e.g. the milk trailer. If another trailer han
 - **Job chaining**: if the vehicle has another open job with the same park position, it continues right away instead of parking first.
 - Manually started AD runs with the same targets are adopted by the matching job.
 - **Several load targets**: if the storage at the first one is empty, the vehicle goes on to the next. If all are empty the job does not start at all.
-- **Storage at the load target**: by default the fullest fitting storage within 80 m counts. If several silos stand side by side (e.g. hay and straw), set the right one in the job under "Storage at …". The **L#** button at the top of the HUD shows a number (L1, L2 …) with the contents above every storage in the world.
+- **Storage at the load target**: by default the fullest fitting storage within 80 m counts. If several silos stand side by side (e.g. hay and straw), set the right one in the job under "Storage at …" or in the **"Storages"** tab (all load targets at a glance, also without a job); right click removes it. The **L#** button at the top of the HUD shows a number (L1, L2 …) with the contents above every storage in the world.
 - If **another fill type** is still on the trailer (rest of another job), it is delivered to a fitting job first.
 - If the unload target does not take anything any more, unloading is given up after 30 s and the rest goes elsewhere instead of waiting forever.
 
@@ -154,7 +156,7 @@ A job can be bound to one trailer, e.g. the milk trailer. If another trailer han
 - **"Planned" tab**: shows per vehicle what it is driving now and which due jobs follow in which order. **Drag & drop** to reorder, **right click** = next, **"Auto"** = automatic order again.
 
 **Vehicle selection via AD park position**
-A job does not store a fixed vehicle but an AutoDrive park position. The vehicle that has this park position assigned and stands there is started. Swapping tractors = park another tractor with a fitting trailer there.
+A job does not store a fixed vehicle but an AutoDrive park position. The vehicle that has this park position assigned and stands there **together with its trailer** (or at the load / unload target of the job) is started. If only the tractor stands there and the trailer somewhere else, the combination is not used. Swapping tractors = park another tractor with a fitting trailer there.
 
 **HUD in AutoDrive style**
 - Open / close: **LCtrl + LAlt + J** (rebindable)
